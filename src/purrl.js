@@ -10,7 +10,7 @@
 // and check it against the provenance hash. Plain ES module with no
 // dependencies: the same file renders in Node and in the browser.
 
-export const SIZE = 24;
+export const SIZE = 32;
 export const SUPPLY = 20;
 export const SEED = 0x50555252; // "PURR"
 
@@ -22,7 +22,9 @@ const PUPIL = '#140c1f';
 // ---------------------------------------------------------------------------
 // Silhouette
 
-// The logo, one character per logo cell, placed 1:1 on the 24×24 canvas.
+// The logo, one character per logo cell, placed 1:1 on the 32×32 canvas. The
+// head turns three-quarters to the right: the tall peak sits at the back, the
+// short one at the front, and a one-pixel snout pokes out of the face.
 const LOGO = [
   '####..........',
   '####......####',
@@ -30,19 +32,26 @@ const LOGO = [
   ...Array(10).fill('##############'),
   '.############.',
 ];
-const HEAD_X = 5, HEAD_Y = 4;
+const HEAD_X = 9, HEAD_Y = 7;
+const SNOUT = new Set([15 * 32 + 23, 16 * 32 + 23]);
 
+// Neck and shoulders, centred under the head.
 const BODY = [
-  '.......##########.......',
-  '.......##########.......',
-  '......############......',
-  '......############......',
-  '.....##############.....',
-  '.....##############.....',
+  '............########............',
+  '............########............',
+  '...........##########...........',
+  '.........##############.........',
+  '.........##############.........',
+  '.......##################.......',
+  '.......##################.......',
+  '.......##################.......',
+  '.......##################.......',
+  '.......##################.......',
+  '.......##################.......',
 ];
-const BODY_Y = 18;
+const BODY_Y = 21;
 
-const inHead = (x, y) => LOGO[y - HEAD_Y]?.[x - HEAD_X] === '#';
+const inHead = (x, y) => LOGO[y - HEAD_Y]?.[x - HEAD_X] === '#' || SNOUT.has(y * SIZE + x);
 const inBody = (x, y) => BODY[y - BODY_Y]?.[x] === '#';
 const inCat = (x, y) => inHead(x, y) || inBody(x, y);
 const inOutline = (x, y) => !inCat(x, y) && (inCat(x - 1, y) || inCat(x + 1, y) || inCat(x, y - 1) || inCat(x, y + 1));
@@ -59,31 +68,15 @@ const OUTLINE_CELLS = cells(inOutline);
 // One pixel beyond the outline, for glows.
 const HALO_CELLS = cells((x, y) => !solid(x, y) && (inOutline(x - 1, y) || inOutline(x + 1, y) || inOutline(x, y - 1) || inOutline(x, y + 1)));
 
-// Light comes from the upper left. H lit, B base, S shade, D deep (occlusion).
-const TONE_MAP = {
-  4: '.....HHHB...............',
-  5: '.....HBBS......HHHB.....',
-  6: '.....HBBS......HBBS.....',
-  7: '.....HBBBHHHHHHBBBS.....',
-  8: '.....HHHBBBBBBBBBBS.....',
-  9: '.....HHBBBBBBBBBBBS.....',
-  10: '.....HBBBBBBBBBBBBS.....',
-  11: '.....HBBBBBBBBBBBBS.....',
-  12: '.....HBBBBBBBBBBBSS.....',
-  13: '.....HBBBBBBBBBBBSS.....',
-  14: '.....HBBBBBBBBBBBSS.....',
-  15: '.....BBBBBBBBBBBBSS.....',
-  16: '.....BBBBBBBBBBBSSD.....',
-  17: '......SSSSSSSSSSSD......',
-  18: '.......DDDDDDDDDD.......',
-  19: '.......SSSSSSSSSD.......',
-  20: '......HBBBBBBBBBSS......',
-  21: '......HBBBBBBBBBSS......',
-  22: '.....HBBBBBBBBBBSSD.....',
-  23: '.....HBBBBBBBBBBSSD.....',
-};
+// Two tones: base, and a shade on the back of the head (the two columns
+// furthest from the light, which comes from the front), the chin and the neck.
 const TONE = new Int8Array(SIZE * SIZE).fill(-1);
-for (const [y, row] of Object.entries(TONE_MAP)) [...row].forEach((c, x) => { if (c !== '.') TONE[y * SIZE + x] = 'HBSD'.indexOf(c); });
+for (const [x, y] of CAT_CELLS) {
+  let left = x;
+  while (inCat(left - 1, y) && inHead(left - 1, y) === inHead(x, y)) left--;
+  const back = x - left < 2, chin = y === HEAD_Y + 13, neck = !inHead(x, y) && y < BODY_Y + 2;
+  TONE[y * SIZE + x] = back || chin || neck ? 2 : 1;
+}
 
 // Flat look: lit pixels use the base colour, occluded ones the single shade.
 const FLAT_TONE = [1, 1, 2, 2];
@@ -174,9 +167,29 @@ class Grid {
     this.px = new Array(SIZE * SIZE).fill(null);
     this.seed = seed;
     this.outlineColor = INK;
+    this.ox = 0;
+    this.oy = 0;
   }
-  get(x, y) { return x < 0 || y < 0 || x >= SIZE || y >= SIZE ? null : this.px[y * SIZE + x]; }
-  set(x, y, c) { if (c && x >= 0 && y >= 0 && x < SIZE && y < SIZE) this.px[y * SIZE + x] = c; }
+  // Trait art was drawn for a head at a reference position; ox/oy move it onto this one.
+  at(ox, oy, draw) {
+    this.ox = ox; this.oy = oy;
+    draw?.(this);
+    this.ox = 0; this.oy = 0;
+  }
+  // Run `draw` in absolute canvas coordinates, ignoring the current offset.
+  abs(draw) {
+    const [ox, oy] = [this.ox, this.oy];
+    this.at(0, 0, draw);
+    this.ox = ox; this.oy = oy;
+  }
+  get(x, y) {
+    x += this.ox; y += this.oy;
+    return x < 0 || y < 0 || x >= SIZE || y >= SIZE ? null : this.px[y * SIZE + x];
+  }
+  set(x, y, c) {
+    x += this.ox; y += this.oy;
+    if (c && x >= 0 && y >= 0 && x < SIZE && y < SIZE) this.px[y * SIZE + x] = c;
+  }
   blend(x, y, c, t) { const under = this.get(x, y); if (under) this.set(x, y, mix(under, c, t)); }
   rect(x, y, w, h, c) { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) this.set(x + i, y + j, c); }
   // ASCII sprite: '.' and ' ' are transparent, every other char is looked up in `map`.
@@ -192,6 +205,10 @@ class Grid {
   }
   // Sprite plus an automatic 1px outline wherever it borders open background.
   shape(x, y, rows, map, edge = this.outlineColor) {
+    x += this.ox; y += this.oy;
+    this.abs(() => this.shapeAbs(x, y, rows, map, edge));
+  }
+  shapeAbs(x, y, rows, map, edge) {
     const filled = new Set();
     rows.forEach((row, j) => [...row].forEach((ch, i) => { if (ch !== '.' && ch !== ' ') filled.add((y + j) * SIZE + x + i); }));
     const ring = new Set();
@@ -360,8 +377,8 @@ function glitchPost(g) {
     if (!solid(x + 1, y)) g.blend(x + 1, y, '#2af5ff', 0.7);
   }
   for (let k = 0; k < 3; k++) {
-    const y = 6 + Math.floor(hash(k, 9, g.seed) * 17), shift = [-2, -1, 1, 2][Math.floor(hash(k, 10, g.seed) * 4)];
-    for (let x = 2; x < 22; x++) g.set(x, y, copy[y * SIZE + Math.min(21, Math.max(2, x - shift))]);
+    const y = 8 + Math.floor(hash(k, 9, g.seed) * (SIZE - 10)), shift = [-2, -1, 1, 2][Math.floor(hash(k, 10, g.seed) * 4)];
+    for (let x = 2; x < SIZE - 2; x++) g.set(x, y, copy[y * SIZE + Math.min(SIZE - 3, Math.max(2, x - shift))]);
   }
 }
 
@@ -371,7 +388,7 @@ function glitchPost(g) {
 
 // --- Eyes: 2×3 at both anchors ----------------------------------------------------
 
-const EYE_L = [7, 10], EYE_R = [15, 10];
+const EYE_L = [14, 13], EYE_R = [19, 13];
 const irisEye = (iris) => (g, [x, y]) => g.sprite(x, y, ['Iw', 'ik', 'ii'], { I: ramp(iris)[2], i: iris, k: PUPIL, w: WHITE });
 const closed = (g, [x, y]) => g.sprite(x, y, ['..', 'kk', '..'], { k: PUPIL });
 const both = (draw, right = draw) => (g) => { draw(g, EYE_L); right(g, EYE_R); };
@@ -399,28 +416,29 @@ const EYES = [
   ['Neon Glow', 2, both(glowing('#2ff3ff', '#e9ffff'))],
   ['Third Eye', 2, (g) => {
     both(irisEye('#3fd17a'))(g);
-    g.glow(11, 8, '#c27dff', 0.3); g.glow(12, 8, '#c27dff', 0.3);
-    g.sprite(11, 7, ['kk', 'Pw', 'pP', 'kk'], { k: PUPIL, p: '#c27dff', P: '#7a2fd6', w: WHITE });
+    g.glow(16, 11, '#c27dff', 0.3); g.glow(17, 11, '#c27dff', 0.3);
+    g.sprite(16, 10, ['kk', 'Pw', 'kk'], { k: PUPIL, P: '#7a2fd6', w: WHITE });
   }, { bare: true }],
-  ['Cyclops', 1.5, (g) => g.sprite(9, 9, [
+  ['Cyclops', 1.5, (g) => g.sprite(14, 11, [
     '.kkkk.',
     'kwwwwk',
     'wwiiIw',
     'wiikiw',
     '.wiiw.',
-  ].slice(0), { k: PUPIL, w: '#f6f3ff', i: '#ff4f8b', I: WHITE }), { bare: true }],
+  ], { k: PUPIL, w: '#f6f3ff', i: '#ff4f8b', I: WHITE }), { bare: true }],
   ['Laser', 1, (g) => {
-    for (const [x, y] of [EYE_L, EYE_R]) {
-      const dir = x < 11 ? -1 : 1;
-      for (let i = 0; i < 12; i++) {
-        const bx = x + (dir < 0 ? -1 - i : 2 + i);
-        g.set(bx, y + 1, '#fff2b0');
-        g.blend(bx, y, '#ff2a4a', 0.75);
-        g.blend(bx, y + 2, '#ff2a4a', 0.75);
-        g.blend(bx, y - 1, '#ff2a4a', 0.3);
-        g.blend(bx, y + 3, '#ff2a4a', 0.3);
-      }
-      g.sprite(x, y, ['rw', 'rr', 'rr'], { r: '#ff2a1f', w: '#fff3ef' });
+    // The front eye fires a beam the way the creature faces; the back eye only glows.
+    const [x, y] = EYE_R;
+    for (let bx = x + 2; bx < SIZE; bx++) {
+      g.set(bx, y + 1, '#fff2b0');
+      g.blend(bx, y, '#ff2a4a', 0.75);
+      g.blend(bx, y + 2, '#ff2a4a', 0.75);
+      g.blend(bx, y - 1, '#ff2a4a', 0.3);
+      g.blend(bx, y + 3, '#ff2a4a', 0.3);
+    }
+    for (const [ex, ey] of [EYE_L, EYE_R]) {
+      for (let j = 0; j < 3; j++) for (let i = 0; i < 2; i++) g.glow(ex + i, ey + j, '#ff2a4a', 0.2);
+      g.sprite(ex, ey, ['rw', 'rr', 'rr'], { r: '#ff2a1f', w: '#fff3ef' });
     }
   }, { bare: true }],
 ];
@@ -492,12 +510,14 @@ const MOUTHS = [
 
 // --- Eyewear (optional) -------------------------------------------------------------
 
-const shades = (frame, lens, glare) => (g) => g.sprite(4, 10, [
-  'kkkkkkkkkkkkkkkk',
-  '..kgLLk..kgLLk..',
-  '..kLMMk..kLMMk..',
-  '...kkk....kkk...',
-], { k: frame, L: lens[0], M: lens[1], g: glare });
+// Glasses sit over both eyes, with the arm running back toward the ear.
+const glasses = (frame, left, right, glare) => (g) => g.sprite(9, 12, [
+  '....kkkkkkkkkk',
+  'kkkkkgakkkgbk.',
+  '....kaAk.kbBk.',
+  '.....kk...kk..',
+], { k: frame, a: left[0], A: left[1], b: right[0], B: right[1], g: glare });
+const shades = (frame, lens, glare) => glasses(frame, lens, lens, glare);
 
 const EYEWEAR = [
   ['None', 62],
@@ -510,22 +530,16 @@ const EYEWEAR = [
     '..k..k....k..k..',
     '..kkkk....kkkk..',
   ], { k: PUPIL })],
-  ['3D Glasses', 5, (g) => g.sprite(4, 9, [
-    '..wwww....wwww..',
-    'wwwrrwwwwwwbbwww',
-    '..wrrw....wbbw..',
-    '..wrrw....wbbw..',
-    '..wwww....wwww..',
-  ], { w: '#f4f4f4', r: '#e8413c', b: '#38b6e8' }), { hidesEyes: true }],
-  ['Monocle', 4, (g) => g.sprite(14, 9, ['gggg.', 'g..g.', 'g..g.', 'g..g.', 'gggg.', '...g.', '....g', '....g'], { g: '#ffcf4a' })],
+  ['3D Glasses', 5, glasses('#f4f4f4', ['#e8413c', '#c42f2b'], ['#38b6e8', '#2a8fc0'], '#ffb3b0'), { hidesEyes: true }],
+  ['Monocle', 4, (g) => g.sprite(18, 12, ['gggg', 'g..g', 'g..g', 'g..g', 'gggg', '...g', '...g', '..g.'], { g: '#ffcf4a' })],
   ['Neon Visor', 4, (g) => {
-    g.sprite(4, 9, [
-      'kkkkkkkkkkkkkkkk',
-      'kabbccddeeffgghk',
-      'kabbccddeeffgghk',
-      'kkkkkkkkkkkkkkkk',
+    g.sprite(9, 12, [
+      '....kkkkkkkkkkk',
+      'kkkkkabcdeffghk',
+      '....kabcdeffghk',
+      '....kkkkkkkkkkk',
     ], { k: '#1a1030', a: '#ff4fd8', b: '#ff5fc0', c: '#f06bff', d: '#b77bff', e: '#7b8cff', f: '#4fb8ff', g: '#3fe0ff', h: '#3ff2ff' });
-    for (let x = 5; x < 19; x++) { g.blend(x, 8, '#ff7be8', 0.25); g.blend(x, 13, '#3ff2ff', 0.25); }
+    for (let x = 13; x < 24; x++) { g.blend(x, 11, '#ff7be8', 0.25); g.blend(x, 16, '#3ff2ff', 0.25); }
   }, { hidesEyes: true }],
   ['Eye Patch', 4, (g) => g.sprite(4, 8, [
     'k..............k',
@@ -536,9 +550,9 @@ const EYEWEAR = [
     '...kk...........',
   ], { k: PUPIL })],
   ['Cyber Eye', 2, (g) => {
-    g.sprite(14, 9, ['mmmm', 'mrRm', 'mRRm', 'mmmm', '.c..', '.cc.'], { m: '#7d8aa3', r: '#ffe0e0', R: '#ff2a3d', c: '#3ff2ff' });
-    g.glow(15, 11, '#ff2a3d', 0.25); g.glow(16, 11, '#ff2a3d', 0.25);
-    g.set(18, 9, '#c9d3e6');
+    g.sprite(18, 12, ['mmmm', 'mrRm', 'mRRm', 'mmmm'], { m: '#7d8aa3', r: '#ffe0e0', R: '#ff2a3d' });
+    g.sprite(15, 16, ['cccc'], { c: '#3ff2ff' });
+    g.glow(19, 14, '#ff2a3d', 0.25); g.glow(20, 14, '#ff2a3d', 0.25);
   }],
 ];
 
@@ -712,14 +726,14 @@ const OUTFITS = [
     g.sprite(8, 20, ['f', '.', '.', 'f'], { f: '#ffc2dc' });
     g.sprite(15, 19, ['f'], { f: '#ffc2dc' });
   }],
-  ['Puffer', 4, { mat: { '#': '#3fc8ff' }, rows: 'body' }, (g) => {
-    for (const y of [19, 21, 23]) for (let x = 5; x < 19; x++) if (inBody(x, y)) g.blend(x, y, '#1a3f9a', 0.35);
-    g.rect(11, 18, 2, 6, '#3a3a4a');
-  }],
-  ['Tie-Dye', 1, (g) => {
+  ['Puffer', 4, { mat: { '#': '#3fc8ff' }, rows: 'body' }, (g) => g.abs(() => {
+    for (const [x, y] of CAT_CELLS) if (y >= BODY_Y && (y - BODY_Y) % 2 === 1) g.blend(x, y, '#1a3f9a', 0.35);
+    g.rect(15, BODY_Y, 2, SIZE - BODY_Y, '#3a3a4a');
+  })],
+  ['Tie-Dye', 1, (g) => g.abs(() => {
     const cs = ['#ff7ab8', '#ffd23f', '#3fc8ff', '#8f7bff'];
     for (const [x, y] of CAT_CELLS) if (y >= BODY_Y) g.set(x, y, ramp(cs[Math.floor((x + 2 * y) / 3) % cs.length])[TONE[y * SIZE + x] > 1 ? 2 : 1]);
-  }],
+  })],
   ['Overalls', 1, { mat: { '#': '#3d6fff' }, rows: 'body' }, (g) => {
     g.sprite(7, 18, ['wkwwwwwwkw', 'wkwwwwwwkw'], { w: '#fff1dc', k: '#2a4fc9' });
     g.set(8, 20, '#ffd35a'); g.set(15, 20, '#ffd35a');
@@ -737,7 +751,7 @@ const OUTFITS = [
     g.sprite(7, 20, ['b', 'b'], { b: '#3d6fff' });
   }],
   ['Striped Sweater', 1, { mat: { '#': '#ffd23f' }, rows: 'body' }, (g) => {
-    for (const [x, y] of CAT_CELLS) if (y === 19 || y === 21 || y === 23) g.set(x, y, '#e8344f');
+    g.abs(() => { for (const [x, y] of CAT_CELLS) if (y > BODY_Y && (y - BODY_Y) % 2 === 0) g.set(x, y, '#e8344f'); });
   }],
   ['Cape', 1, { mat: { '#': '#7a2fd6' }, rows: 'body' }, (g) => {
     g.sprite(9, 18, ['.gggg.'], { g: '#ffd35a' });
@@ -868,7 +882,7 @@ export function renderGrid(t, stage = STAGES.length - 1) {
   if (stage >= 2) {
     if (fur.glow) for (const [x, y] of HALO_CELLS) g.blend(x, y, fur.glow, 0.45);
   }
-  if (traits) option('Headwear')[3]?.back?.(g);
+  if (traits) g.at(4, 3, option('Headwear')[3]?.back);
 
   // The body: materials resolved through the tone map.
   const under = g.px.slice();
@@ -877,8 +891,9 @@ export function renderGrid(t, stage = STAGES.length - 1) {
   const m = {
     def: (k, c) => { ramps[k] = ramp(c); },
     set: (x, y, k) => { if (inCat(x, y)) mat[y * SIZE + x] = k; },
+    // Pattern sprites are drawn for the reference head, so shift them like traits.
     sprite: (x, y, rows, keys, key) => rows.forEach((row, j) => [...row].forEach((ch, i) => {
-      if (ch !== '.' && ch !== ' ' && keys.includes(ch)) m.set(x + i, y + j, key ?? ch);
+      if (ch !== '.' && ch !== ' ' && keys.includes(ch)) m.set(x + i + 4, y + j + 3, key ?? ch);
     })),
   };
   for (const [x, y] of CAT_CELLS) mat[y * SIZE + x] = 'fur';
@@ -902,14 +917,14 @@ export function renderGrid(t, stage = STAGES.length - 1) {
   // Front plane.
   if (traits) {
     const outfit = option('Outfit');
-    (typeof outfit[2] === 'function' ? outfit[2] : outfit[3])?.(g);
+    g.at(4, 3, typeof outfit[2] === 'function' ? outfit[2] : outfit[3]);
   }
   if (stage >= 3) {
     option('Eyes')?.[2]?.(g);
-    option('Mouth')[2]?.(g);
+    g.at(8, 3, option('Mouth')[2]);
   }
   if (traits) {
-    option('Headwear')[2]?.(g);
+    g.at(4, 3, option('Headwear')[2]);
   }
   if (stage >= 2) fur.post?.(g);
   return g.px;
