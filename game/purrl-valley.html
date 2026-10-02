@@ -38,17 +38,17 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 18px; margin: 0; 
 .chip.purr b { color: #b06d0e; }
 .chip.usdt b { color: #24745f; }
 
-.stage { position: relative; height: min(78vh, 820px); min-height: 440px; border: 3px solid var(--ink); box-shadow: 5px 5px 0 var(--ink); background: #3f96c6; overflow: hidden; }
-canvas#map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+.stage { position: relative; height: min(80vh, 860px); min-height: 460px; border: 3px solid var(--ink); box-shadow: 5px 5px 0 var(--ink); background: #a8d8f0; overflow: hidden; }
+canvas#map { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; cursor: grab; touch-action: none; }
 .float { position: absolute; top: 12px; left: 12px; width: min(320px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow: auto; z-index: 2; }
 .ctrl { position: absolute; top: 12px; right: 12px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; z-index: 2; max-width: 50%; }
 .ctrl button { min-width: 36px; }
-#mini { position: absolute; right: 12px; bottom: 12px; width: 192px; height: 144px; border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); image-rendering: pixelated; cursor: crosshair; z-index: 2; touch-action: none; background: #3f96c6; }
-.hint { position: absolute; left: 12px; bottom: 10px; margin: 0; font-size: 12px; font-weight: 700; color: #fff; text-shadow: 1px 1px 0 var(--ink); z-index: 1; max-width: calc(100% - 230px); }
+#mini { position: absolute; right: 12px; bottom: 12px; width: 168px; height: 168px; border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); image-rendering: pixelated; cursor: crosshair; z-index: 2; touch-action: none; background: #3f96c6; }
+.hint { position: absolute; left: 12px; bottom: 10px; margin: 0; font-size: 12px; font-weight: 700; color: #fff; text-shadow: 1px 1px 0 var(--ink); z-index: 1; max-width: calc(100% - 210px); }
 .board { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; align-items: start; }
 @media (max-width: 640px) {
   .stage { height: 72vh; min-height: 380px; }
-  #mini { width: 120px; height: 90px; }
+  #mini { width: 110px; height: 110px; }
   .hint { display: none; }
   .float { top: auto; bottom: 12px; max-height: 46%; width: calc(100% - 160px); min-width: 0; padding: 10px; }
 }
@@ -96,15 +96,15 @@ svg.spark { width: 100%; height: 54px; display: block; }
     <div class="wallet" id="wallet" aria-live="polite"></div>
   </header>
   <div id="banner"></div>
-  <div class="stage">
-    <canvas id="map" aria-label="Bản đồ Purrl Valley. Kéo để di chuyển, cuộn để phóng to."></canvas>
+  <div class="stage" id="stage">
+    <canvas id="map" aria-label="Bản đồ 3D Purrl Valley. Kéo để di chuyển, chuột phải để xoay, cuộn để phóng to."></canvas>
     <section class="card float" id="plot"></section>
     <div class="ctrl" role="group" aria-label="Điều khiển camera">
       <button id="zin" aria-label="Phóng to">+</button><button id="zout" aria-label="Thu nhỏ">−</button>
-      <button id="zall">Toàn cảnh</button><button id="zhome">Đất của tôi</button>
+      <button id="zrot" aria-label="Xoay camera">⟳</button><button id="zall">Toàn cảnh</button><button id="zhome">Đất của tôi</button>
     </div>
-    <canvas id="mini" width="192" height="144" aria-label="Bản đồ thu nhỏ, bấm để nhảy tới"></canvas>
-    <p class="hint">Kéo chuột hoặc WASD để di chuyển · cuộn hoặc chụm hai ngón để phóng to · bấm một ô để chọn</p>
+    <canvas id="mini" width="168" height="168" aria-label="Bản đồ thu nhỏ, bấm để nhảy tới"></canvas>
+    <p class="hint">Kéo chuột hoặc WASD để di chuyển · chuột phải hoặc Q/E để xoay · cuộn để zoom · bấm một ô đất để chọn</p>
   </div>
   <div class="board">
     <aside class="side">
@@ -126,9 +126,11 @@ svg.spark { width: 100%; height: 54px; display: block; }
 </div>
 <div class="toast" id="toast" hidden></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script>
 // ---------- Game rules (prototype numbers, coin is play money) ----------
-const MAP_W = 64, MAP_H = 48, T = 16;
+const MAP_W = 24, MAP_H = 24;                    // 24×24 square plots
 const START = { purr: 500, usdt: 100 };
 const LAND_BASE = 100, LAND_STEP = 2;               // land price rises with every plot sold
 const CLAIM_CD = 10 * 60 * 1000, CLAIM_FEE = 0.05;
@@ -173,241 +175,351 @@ function pendingNow(f, now = Date.now()) { return (f.pending || 0) + houseRate(f
 function clone(o) { return JSON.parse(JSON.stringify(o)); }
 function accrued(f) { const g = clone(f), now = Date.now(); g.pending = pendingNow(f, now); g.accrueAt = now; return g; }
 
-// ---------- World: terrain, pixel art, camera ----------
-const WORLD_W = MAP_W * T, WORLD_H = MAP_H * T;
+// ---------- World: voxel terrain in 3D (Three.js), square plots, orbit camera ----------
+const N = MAP_W, P = 7, WV = N * P + 1;            // N×N plots, each 6×6 blocks + 1-block road
 function hash(a, b, c = 0) { let h = (a * 374761393 + b * 668265263 + c * 2147483647) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
 function vnoise(x, y, s, seed) {
   const gx = x / s, gy = y / s, x0 = Math.floor(gx), y0 = Math.floor(gy), fx = gx - x0, fy = gy - y0;
   const sm = (t) => t * t * (3 - 2 * t), a = hash(x0, y0, seed), b = hash(x0 + 1, y0, seed), c = hash(x0, y0 + 1, seed), d = hash(x0 + 1, y0 + 1, seed);
-  return (a + (b - a) * sm(fx)) + ((c + (d - c) * sm(fx)) - (a + (b - a) * sm(fx))) * sm(fy);
+  const top = a + (b - a) * sm(fx), bot = c + (d - c) * sm(fx);
+  return top + (bot - top) * sm(fy);
 }
-// terrain: 0 grass (buyable), 1 water, 2 sand, 3 road, 4 forest, 5 plaza, 6 bridge
-const TER = new Uint8Array(MAP_W * MAP_H);
-const ter = (x, y) => (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H ? 1 : TER[y * MAP_W + x]);
-(function genWorld() {
-  const CX = MAP_W / 2, CY = MAP_H / 2;
-  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
-    let t = 0;
-    const lake = vnoise(x, y, 9, 1) * .7 + vnoise(x, y, 4, 2) * .3;
-    const edge = Math.min(x, y, MAP_W - 1 - x, MAP_H - 1 - y);
-    const riverX = 46 + Math.round(3 * Math.sin(y / 5) + 2 * Math.sin(y / 2.3));
-    if (lake < .26 || edge < 1 || (x >= riverX && x <= riverX + 1)) t = 1;
-    else if (vnoise(x, y, 6, 3) > .66 || edge < 3 && hash(x, y, 4) < .55) t = 4;
-    if (Math.abs(x - CX) <= 2 && Math.abs(y - CY) <= 2) t = 5;
-    else if (t !== 1 && (y % 12 === 6 || x % 16 === 8) && edge >= 1) t = 3;
-    else if (t === 1 && (y % 12 === 6 || x % 16 === 8) && edge >= 2 && lake >= .2) t = 6;
-    TER[y * MAP_W + x] = t;
-  }
-  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) if (TER[y * MAP_W + x] === 0 || TER[y * MAP_W + x] === 4) {
-    if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => ter(x + a, y + b) === 1)) TER[y * MAP_W + x] = 2;
-  }
-})();
-const buyable = (x, y) => ter(x, y) === 0;
-let BUYABLE = 0; for (const t of TER) if (t === 0) BUYABLE++;
+// plot kinds: 0 grass (for sale), 1 lake, 2 forest, 3 mountain, 4 town square
+const PK = new Uint8Array(N * N);
+const ter = (i, j) => (i < 0 || j < 0 || i >= N || j >= N ? 3 : PK[j * N + i]);
+const PLAZA = [Math.floor(N / 2) - 1, Math.floor(N / 2)];
+for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+  let k = 0;
+  if (i === 0 || j === 0 || i === N - 1 || j === N - 1) k = 3;
+  else if (PLAZA.includes(i) && PLAZA.includes(j)) k = 4;
+  else if (vnoise(i, j, 5, 11) < .27) k = 1;
+  else if (vnoise(i, j, 4, 23) > .7) k = 2;
+  PK[j * N + i] = k;
+}
+const buyable = (i, j) => ter(i, j) === 0;
+let BUYABLE = 0; for (const k of PK) if (k === 0) BUYABLE++;
+const origin = (i, j) => [1 + i * P, 1 + j * P];      // first block of the plot
 
-const world = document.createElement('canvas'); world.width = WORLD_W; world.height = WORLD_H;
-const wx = world.getContext('2d');
-function px(x, y, c) { wx.fillStyle = c; wx.fillRect(x, y, 1, 1); }
-function sprite(ox, oy, rows, pal) { rows.forEach((r, y) => [...r].forEach((ch, x) => { if (pal[ch]) px(ox + x, oy + y, pal[ch]); })); }
-const HOUSE_ART = [
-  '................', '..KK............', '.KRRK......KK...', '.KRRK.....KRRK..',
-  '.KRRRKKKKKKRRRK.', '.KRRRRRRRRRRRRK.', 'KRRRRRRRRRRRRRRK', 'KKKKKKKKKKKKKKKK',
-  '.KWWWWWWWWWWWWK.', '.KWBBWWWWWDDWWK.', '.KWBBWWWWWDDWWK.', '.KWWWWWWWWDdWWK.',
-  '.KWWWWWWWWDDWWK.', '.KKKKKKKKKKKKKK.', '................', '................',
-];
-const TREE = ['....KKKK....', '..KKggggKK..', '.KgggGggggK.', 'KggGgggggGgK', 'KgggggGggggK', 'KgGggggggGgK', '.KggggGgggK.', '..KKggggKK..', '....KttK....', '....KttK....', '.....KK.....'];
-const ROOFS = [null, '#a8724c', '#d6455a', '#7a4ad6'];
-const PLANT = {
-  seed: ['     ', '     ', '  s  ', '     ', '     '], sprout: ['     ', '  g  ', ' g g ', '  g  ', '     '],
-  grow: [' g g ', '  g  ', ' ggg ', '  g  ', '     '], carrot: [' g g ', '  g  ', ' ooo ', '  o  ', '     '],
-  tomato: [' grg ', 'grgrg', ' ggg ', '  g  ', '     '], pumpkin: ['  g  ', ' ooo ', 'ooooo', ' ooo ', '     '],
+const stage = $('stage'), cv = $('map');
+let renderer = null, scene, camera, controls, groundPlane, selBox, hovBox, dynMeshes = [];
+let land3dReady = false;
+
+// pixel textures, generated once
+function mkTex(draw) {
+  const c = document.createElement('canvas'); c.width = c.height = 16; const g = c.getContext('2d'); draw(g);
+  const t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; return t;
+}
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const fillN = (g, cols, y0 = 0, y1 = 16) => { for (let y = y0; y < y1; y++) for (let x = 0; x < 16; x++) { g.fillStyle = pick(cols); g.fillRect(x, y, 1, 1); } };
+const C = {
+  grass: ['#6fbf4a', '#5fae3e', '#7cc95a', '#68b845', '#5aa63a'],
+  dirt: ['#8a5a3a', '#7a4e32', '#97674a', '#6e452c'],
+  road: ['#a99e90', '#958a7c', '#b8ad9f', '#8a8072', '#c2b8aa'],
+  stone: ['#8f8f96', '#7d7d84', '#a0a0a8', '#86868d'],
+  snow: ['#ffffff', '#f2f6fa', '#e6eef6'],
+  sand: ['#e8d6a0', '#dcc88f', '#f1e2b4'],
+  water: ['#3f8fd8', '#4a9be2', '#3884cc', '#5aa6e8'],
+  leaves: ['#3f8a34', '#357a2c', '#4a9a3e', '#2c6a26', '#4f9f40'],
+  cobble: ['#bdb6aa', '#aaa398', '#cfc8bc', '#9d968b'],
+  cream: ['#f4e9d0', '#efe2c4', '#f8efdc'],
 };
-function speckle(ox, oy, x, y, base, a, b, n) { wx.fillStyle = base; wx.fillRect(ox, oy, T, T); for (let i = 0; i < n; i++) px(ox + Math.floor(hash(x, y, i) * T), oy + Math.floor(hash(y, x, i + 7) * T), hash(x, y, i + 99) < .5 ? a : b); }
-function drawTerrain(x, y) {
-  const ox = x * T, oy = y * T, t = ter(x, y);
-  if (t === 1) {
-    speckle(ox, oy, x, y, '#4fa8d8', '#62b8e4', '#3f96c6', 6);
-    for (let i = 0; i < 2; i++) { const a = Math.floor(hash(x, y, 40 + i) * 12), b = Math.floor(hash(x, y, 50 + i) * 14); wx.fillStyle = '#9ad6f2'; wx.fillRect(ox + a, oy + b, 3, 1); }
-  } else if (t === 2) speckle(ox, oy, x, y, '#f0d9a0', '#e6c98a', '#f8e6b8', 10);
-  else if (t === 3 || t === 5) {
-    speckle(ox, oy, x, y, t === 5 ? '#d8d0c4' : '#c9b48e', t === 5 ? '#c4bcb0' : '#b8a27a', t === 5 ? '#e8e2d8' : '#d8c6a0', 14);
-    if (t === 5) { wx.fillStyle = '#b8b0a4'; for (let i = 0; i < T; i += 4) { wx.fillRect(ox + i, oy, 1, T); wx.fillRect(ox, oy + i, T, 1); } }
-  } else if (t === 6) {
-    wx.fillStyle = '#4fa8d8'; wx.fillRect(ox, oy, T, T); wx.fillStyle = '#a8724c'; wx.fillRect(ox + 2, oy, 12, T);
-    wx.fillStyle = '#8a5a3c'; for (let i = 0; i < T; i += 3) wx.fillRect(ox + 2, oy + i, 12, 1); wx.fillRect(ox + 1, oy, 1, T); wx.fillRect(ox + 14, oy, 1, T);
-  } else {
-    speckle(ox, oy, x, y, '#8fd16a', '#7cc05a', '#a6e07c', 10);
-    if (hash(x, y, 77) < .12) { px(ox + 4, oy + 5, '#ff8fc8'); px(ox + 11, oy + 10, '#fff2a8'); }
-    if (t === 4) sprite(ox + 2, oy + 2, TREE, { K: '#2b4a2a', g: '#4f9a44', G: '#6fbc5a', t: '#7a4a2c' });
+function buildTextures() {
+  const T = {};
+  T.grassTop = mkTex((g) => fillN(g, C.grass));
+  T.dirt = mkTex((g) => fillN(g, C.dirt));
+  T.grassSide = mkTex((g) => { fillN(g, C.dirt); fillN(g, C.grass, 0, 3); for (let x = 0; x < 16; x++) if (Math.random() < .45) { g.fillStyle = pick(C.grass); g.fillRect(x, 3, 1, 1 + (Math.random() < .3)); } });
+  T.road = mkTex((g) => fillN(g, C.road));
+  T.stone = mkTex((g) => { fillN(g, C.stone); g.fillStyle = '#6e6e75'; for (let i = 0; i < 5; i++) g.fillRect(Math.floor(Math.random() * 14), Math.floor(Math.random() * 15), 3, 1); });
+  T.snowTop = mkTex((g) => fillN(g, C.snow));
+  T.snowSide = mkTex((g) => { fillN(g, C.stone); fillN(g, C.snow, 0, 4); });
+  T.sand = mkTex((g) => fillN(g, C.sand));
+  T.water = mkTex((g) => { fillN(g, C.water); g.fillStyle = '#9ad0f4'; for (let i = 0; i < 4; i++) g.fillRect(Math.floor(Math.random() * 12), Math.floor(Math.random() * 16), 4, 1); });
+  T.leaves = mkTex((g) => { fillN(g, C.leaves); g.fillStyle = '#245a20'; for (let i = 0; i < 14; i++) g.fillRect(Math.floor(Math.random() * 16), Math.floor(Math.random() * 16), 1, 1); });
+  T.logSide = mkTex((g) => { for (let x = 0; x < 16; x++) for (let y = 0; y < 16; y++) { g.fillStyle = x % 4 === 0 ? '#4a2e1a' : pick(['#6b4428', '#5e3b22', '#74492c']); g.fillRect(x, y, 1, 1); } });
+  T.logTop = mkTex((g) => { for (let x = 0; x < 16; x++) for (let y = 0; y < 16; y++) { const r = Math.round(Math.hypot(x - 7.5, y - 7.5)); g.fillStyle = r > 6 ? '#5e3b22' : r % 2 ? '#c9a06a' : '#b08a58'; g.fillRect(x, y, 1, 1); } });
+  T.cobble = mkTex((g) => { fillN(g, C.cobble); g.fillStyle = '#8a8378'; for (let i = 0; i < 16; i += 4) { g.fillRect(0, i, 16, 1); g.fillRect((i * 3) % 16, i, 1, 4); g.fillRect((i * 3 + 8) % 16, i, 1, 4); } });
+  T.cream = mkTex((g) => fillN(g, C.cream));
+  T.plank = mkTex((g) => { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { g.fillStyle = y % 4 === 3 ? '#8a6238' : pick(['#c2945a', '#b98b52', '#c99c62']); g.fillRect(x, y, 1, 1); } g.fillStyle = '#8a6238'; g.fillRect(5, 0, 1, 3); g.fillRect(11, 4, 1, 3); g.fillRect(3, 8, 1, 3); g.fillRect(9, 12, 1, 3); });
+  T.farm = mkTex((g) => { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { g.fillStyle = y % 4 < 2 ? pick(['#5a3a22', '#4e321d']) : pick(['#6e4a2e', '#7a5434']); g.fillRect(x, y, 1, 1); } });
+  return T;
+}
+function mats(T) {
+  const L = (map, extra) => new THREE.MeshLambertMaterial({ map, ...extra });
+  const side = (s, top, bot) => [L(s), L(s), L(top), L(bot), L(s), L(s)];
+  return {
+    grass: side(T.grassSide, T.grassTop, T.dirt), dirt: L(T.dirt), road: L(T.road), stone: L(T.stone),
+    snow: side(T.snowSide, T.snowTop, T.stone), sand: L(T.sand), water: L(T.water, { transparent: true, opacity: .86 }),
+    leaves: L(T.leaves), log: side(T.logSide, T.logTop, T.logTop), cobble: L(T.cobble), cream: L(T.cream),
+    plank: L(T.plank), farm: L(T.farm),
+  };
+}
+const box = () => new THREE.BoxGeometry(1, 1, 1);
+let MAT = null;
+function instanced(type, list, scaleY = 1, offY = 0) {
+  const n = list.length / 3; if (!n) return null;
+  const m = new THREE.InstancedMesh(box(), MAT[type], n), o = new THREE.Object3D();
+  for (let i = 0; i < n; i++) { o.position.set(list[i * 3], list[i * 3 + 1] + offY, list[i * 3 + 2]); o.scale.set(1, scaleY, 1); o.updateMatrix(); m.setMatrixAt(i, o.matrix); }
+  m.instanceMatrix.needsUpdate = true; scene.add(m); return m;
+}
+function buildStatic() {
+  const B = {}; const add = (t, x, y, z) => (B[t] || (B[t] = [])).push(x, y, z);
+  const inPlot = (v) => v % P !== 0;
+  for (let z = 0; z < WV; z++) for (let x = 0; x < WV; x++) {
+    const i = Math.min(N - 1, Math.floor((x - 1) / P)), j = Math.min(N - 1, Math.floor((z - 1) / P));
+    const onPlot = inPlot(x) && inPlot(z) && x > 0 && z > 0;
+    const k = ter(Math.max(0, i), Math.max(0, j));
+    const plaza = PLAZA.includes(i) && PLAZA.includes(j) && x >= 1 + PLAZA[0] * P && x <= 6 + PLAZA[1] * P && z >= 1 + PLAZA[0] * P && z <= 6 + PLAZA[1] * P;
+    if (plaza) { add('cobble', x, 1, z); continue; }
+    if (!onPlot) {
+      const nearWater = ter(i, j) === 1 || ter(Math.floor(x / P) - (x % P === 0 ? 1 : 0), j) === 1;
+      add(k === 3 && (x === 0 || z === 0 || x === WV - 1 || z === WV - 1) ? 'stone' : nearWater && k === 1 ? 'sand' : 'road', x, 0, z); continue;
+    }
+    if (k === 1) { add('water', x, 0, z); continue; }
+    if (k === 3) {
+      const h = 2 + Math.floor(vnoise(x, z, 7, 5) * 5 + vnoise(x, z, 3, 6) * 2);
+      for (let y = 1; y <= h; y++) add(y === h && h >= 6 ? 'snow' : y === h ? 'grass' : 'stone', x, y, z);
+      continue;
+    }
+    add('grass', x, 1, z);
   }
-}
-function drawPlot(x, y, now) {
-  const k = key(x, y), l = land[k];
-  drawTerrain(x, y);
-  if (!l) return;
-  const ox = x * T, oy = y * T;
-  wx.fillStyle = '#c99a6b'; wx.fillRect(ox + 1, oy + 1, T - 2, T - 2);
-  wx.fillStyle = '#b4875a'; for (let r = 3; r < T - 2; r += 3) wx.fillRect(ox + 2, oy + r, T - 4, 1);
-  wx.strokeStyle = l.owner === me ? '#f2a93b' : (colors[l.owner] || '#6f6878'); wx.lineWidth = 1; wx.strokeRect(ox + .5, oy + .5, T - 1, T - 1);
-  [[0, 0], [T - 1, 0], [0, T - 1], [T - 1, T - 1]].forEach(([a, b]) => px(ox + a, oy + b, '#2b2433'));
-  const f = farms[l.owner], p = f && f.plots && f.plots[k];
-  if (!p) return;
-  if (p.kind === 'house') {
-    sprite(ox, oy, HOUSE_ART, { K: '#2b2433', R: ROOFS[p.level], W: '#fff4dc', B: '#7fd6ff', D: '#8a5a3c', d: '#ffd23f' });
-    if (p.level >= 2) { px(ox + 12, oy + 1, '#2b2433'); px(ox + 12, oy + 2, '#2b2433'); }
-    if (p.level >= 3) { px(ox + 2, oy + 0, '#ffd23f'); px(ox + 3, oy + 0, '#ffd23f'); }
-  } else if (p.kind === 'crop') {
-    const c = CROPS[p.crop], t = (now - p.plantedAt) / c.grow;
-    const stage = t >= 1 ? p.crop : t > .6 ? 'grow' : t > .25 ? 'sprout' : 'seed';
-    const pal = { g: '#3f8a3a', s: '#6b4a2a', o: p.crop === 'carrot' ? '#ff8a1f' : '#f28a1f', r: '#e8344f' };
-    [[2, 2], [9, 2], [2, 9], [9, 9]].forEach(([a, b]) => sprite(ox + a, oy + b, PLANT[stage], pal));
-    if (t >= 1) { px(ox + 7, oy + 1, '#ffffff'); px(ox + 8, oy + 1, '#ffffff'); px(ox + 7, oy + 0, '#ffd23f'); }
+  // sandy shore inside lake plots
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) if (ter(i, j) === 1) {
+    const [ox, oz] = origin(i, j);
+    for (let a = 0; a < 6; a++) for (let b = 0; b < 6; b++) if ((a === 0 || b === 0 || a === 5 || b === 5) && hash(ox + a, oz + b, 8) < .35) add('sand', ox + a, 0.02, oz + b);
   }
+  // forests
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) if (ter(i, j) === 2) {
+    const [ox, oz] = origin(i, j);
+    [[1, 1], [4, 2], [2, 4], [4, 5]].forEach(([a, b], n) => {
+      if (n === 3 && hash(i, j, 9) < .5) return;
+      const tx = ox + a, tz = oz + b, h = 3 + Math.floor(hash(tx, tz, 3) * 2);
+      for (let y = 2; y < 2 + h; y++) add('log', tx, y, tz);
+      for (let dy = h; dy <= h + 2; dy++) { const r = dy === h + 2 ? 0 : 1; for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) if (!(dx === 0 && dz === 0 && dy < h + 1)) add('leaves', tx + dx, 1 + dy, tz + dz); }
+    });
+  }
+  // fountain and the Purrl statue in the square
+  const c0 = 1 + PLAZA[0] * P, cx0 = c0 + 6.5, cz0 = c0 + 6.5;
+  for (let a = -3; a <= 3; a++) for (let b = -3; b <= 3; b++) {
+    const r = Math.max(Math.abs(a), Math.abs(b)), X = Math.round(cx0 - .5 + a), Z = Math.round(cz0 - .5 + b);
+    if (r === 3) add('stone', X, 2, Z); else add('water', X, 1.6, Z);
+  }
+  const LOGO = ['##....', '##..##', '######', '######', '######', '.####.'];
+  LOGO.forEach((row, r) => [...row].forEach((ch, q) => { if (ch === '#') for (let d = 0; d < 2; d++) add('cream', Math.round(cx0 - 3.5) + q, 2 + (LOGO.length - r), Math.round(cz0 - 1) + d); }));
+  for (const t of Object.keys(B)) instanced(t, B[t], t === 'water' ? .8 : 1, t === 'water' ? -.1 : 0);
 }
-// fountain + Purrl statue in the town square
-function drawPlaza() {
-  const cx0 = (MAP_W / 2) * T - 8, cy0 = (MAP_H / 2) * T - 8;
-  wx.fillStyle = '#2b2433'; wx.beginPath(); wx.arc(cx0 + 8, cy0 + 8, 13, 0, 7); wx.fill();
-  wx.fillStyle = '#4fa8d8'; wx.beginPath(); wx.arc(cx0 + 8, cy0 + 8, 12, 0, 7); wx.fill();
-  sprite(cx0 + 2, cy0 - 1, ['KKKK....KKKK', 'KCCK....KCCK', 'KCCKKKKKKCCK', 'KCCCCCCCCCCK', 'KCCkCCCCkCCK', 'KCCCCCCCCCCK', 'KCCCCkkCCCCK', 'KCCCCCCCCCCK', '.KCCCCCCCCK.', '..KKKKKKKK..'].map((r) => r), { K: '#2b2433', C: '#f4e9d0', k: '#2b2433' });
-}
-let landDrawn = new Set();
-function redrawLand(all) {
-  const now = Date.now(), want = new Set(Object.keys(land));
-  const todo = all ? want : new Set([...want, ...landDrawn]);
-  for (const k of todo) { const [x, y] = k.split('_').map(Number); drawPlot(x, y, now); }
-  landDrawn = want; drawMini();
-}
-function redrawCrops() {
+// dynamic layer: owned plots, houses, crops
+const ROOFS = [null, '#a8724c', '#d6455a', '#7a4ad6'];
+function buildDynamic() {
+  for (const m of dynMeshes) { scene.remove(m); m.geometry.dispose(); }
+  dynMeshes = [];
+  const col = [], plank = [], farm = [];
+  const cbox = (x, y, z, sx, sy, sz, c) => col.push([x, y, z, sx, sy, sz, c]);
   const now = Date.now();
-  for (const [k, l] of Object.entries(land)) { const p = farms[l.owner] && farms[l.owner].plots && farms[l.owner].plots[k]; if (p && p.kind === 'crop') { const [x, y] = k.split('_').map(Number); drawPlot(x, y, now); } }
+  for (const [k, l] of Object.entries(land)) {
+    const [i, j] = k.split('_').map(Number); if (!buyable(i, j)) continue;
+    const [ox, oz] = origin(i, j), owner = l.owner === me ? '#f2a93b' : (colors[l.owner] || '#8a7a9a');
+    // fence: corner posts and rails in the owner's colour
+    for (let a = 0; a < 6; a++) {
+      cbox(ox + a, 1.62, oz - .42, 1, .12, .12, owner); cbox(ox + a, 1.62, oz + 5.42, 1, .12, .12, owner);
+      cbox(ox - .42, 1.62, oz + a, .12, .12, 1, owner); cbox(ox + 5.42, 1.62, oz + a, .12, .12, 1, owner);
+    }
+    [[-.42, -.42], [5.42, -.42], [-.42, 5.42], [5.42, 5.42], [2.5, -.42], [2.5, 5.42], [-.42, 2.5], [5.42, 2.5]].forEach(([a, b]) => cbox(ox + a, 1.85, oz + b, .2, .7, .2, '#4a3220'));
+    const f = farms[l.owner], p = f && f.plots && f.plots[k];
+    if (!p) continue;
+    if (p.kind === 'house') {
+      const lv = p.level, wallH = lv === 3 ? 6 : lv === 2 ? 4 : 3, x0 = ox + 1, z0 = oz + 1;
+      for (let y = 2; y < 2 + wallH; y++) for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) plank.push(x0 + a, y, z0 + b);
+      cbox(x0 + 1.5, 2.5, z0 + 3.53, .9, 2, .08, '#6a4428');                         // door, front (+z)
+      for (let y of lv === 3 ? [3, 6] : [3]) { cbox(x0 - .03, y, z0 + 1.5, .08, .8, 1.4, '#9ad6f2'); cbox(x0 + 3.03, y, z0 + 1.5, .08, .8, 1.4, '#9ad6f2'); cbox(x0 + .5, y + (lv === 3 && y === 6 ? 0 : 1), z0 + 3.53, .7, .7, .08, '#9ad6f2'); }
+      const ry = 2 + wallH, roof = ROOFS[lv];
+      for (let s = 0; s < 3; s++) { const w = 6 - s * 2; cbox(x0 + 1.5, ry + s * .6, z0 + 1.5, w, .6, w, s % 2 ? roof : shadeHex(roof)); }
+      if (lv >= 2) { for (let y = ry - 1; y < ry + 2; y++) cbox(x0 + 3, y, z0, 1, 1, 1, '#7d7d84'); }
+      if (lv === 3) { cbox(x0 + 1.5, ry + 2.4, z0 + 1.5, .12, 1.6, .12, '#4a3220'); cbox(x0 + 1.95, ry + 2.9, z0 + 1.5, .8, .5, .08, '#ffd23f'); }
+    } else if (p.kind === 'crop') {
+      const c = CROPS[p.crop], t = (now - p.plantedAt) / c.grow;
+      for (let a = 1; a <= 4; a++) for (let b = 1; b <= 4; b++) {
+        farm.push(ox + a, 1.52, oz + b);
+        const X = ox + a, Z = oz + b;
+        if (t < .25) cbox(X, 1.62, Z, .2, .1, .2, '#6b4a2a');
+        else if (t < .6) cbox(X, 1.75, Z, .25, .35, .25, '#5fae3e');
+        else if (t < 1) cbox(X, 1.85, Z, .45, .55, .45, '#3f8a3a');
+        else {
+          if (p.crop === 'carrot') { cbox(X, 1.68, Z, .42, .3, .42, '#ff8a1f'); cbox(X, 2.02, Z, .22, .4, .22, '#3f8a3a'); continue; }
+          cbox(X, 1.85, Z, .4, .55, .4, '#3f8a3a');
+          if (p.crop === 'tomato') cbox(X, 2.2, Z, .32, .32, .32, '#e8344f');
+          if (p.crop === 'pumpkin') cbox(X, 1.85, Z, .7, .55, .7, '#f28a1f');
+        }
+      }
+    }
+  }
+  const o = new THREE.Object3D();
+  if (col.length) {
+    const m = new THREE.InstancedMesh(box(), new THREE.MeshLambertMaterial({ color: 0xffffff }), col.length), c = new THREE.Color();
+    col.forEach(([x, y, z, sx, sy, sz, hex], n) => { o.position.set(x, y, z); o.scale.set(sx, sy, sz); o.updateMatrix(); m.setMatrixAt(n, o.matrix); m.setColorAt(n, c.set(hex)); });
+    m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; scene.add(m); dynMeshes.push(m);
+  }
+  if (plank.length) dynMeshes.push(instanced('plank', plank));
+  if (farm.length) dynMeshes.push(instanced('farm', farm, .06, 0));
+  dynMeshes = dynMeshes.filter(Boolean);
+  drawMini();
 }
-for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) drawTerrain(x, y);
-drawPlaza();
+function shadeHex(h) { const n = parseInt(h.slice(1), 16), f = (v) => Math.round(v * .82); return '#' + [f(n >> 16), f((n >> 8) & 255), f(n & 255)].map((v) => v.toString(16).padStart(2, '0')).join(''); }
+function cropSig() {
+  const now = Date.now(); let s = '';
+  for (const [k, l] of Object.entries(land)) { const p = farms[l.owner] && farms[l.owner].plots && farms[l.owner].plots[k]; if (p && p.kind === 'crop') { const t = (now - p.plantedAt) / CROPS[p.crop].grow; s += k + (t < .25 ? 0 : t < .6 ? 1 : t < 1 ? 2 : 3); } }
+  return s;
+}
+let lastSig = '';
+function redrawLand() { if (land3dReady) { buildDynamic(); lastSig = cropSig(); } }
+function redrawCrops() { if (!land3dReady) return; const s = cropSig(); if (s !== lastSig) { lastSig = s; buildDynamic(); } }
+function draw() { redrawLand(); }
 
-// camera
-const cv = $('map'), cx = cv.getContext('2d');
-const cam = { x: WORLD_W / 2, y: WORLD_H / 2, z: 3 };
-let vw = 0, vh = 0, dpr = 1, hover = null;
-const minZ = () => Math.max(vw / WORLD_W, vh / WORLD_H);
-function clampCam() {
-  cam.z = Math.min(10, Math.max(minZ(), cam.z));
-  const hw = vw / 2 / cam.z, hh = vh / 2 / cam.z;
-  cam.x = Math.min(WORLD_W - hw, Math.max(hw, cam.x)); cam.y = Math.min(WORLD_H - hh, Math.max(hh, cam.y));
-}
-function resize() {
-  const r = cv.getBoundingClientRect(); dpr = window.devicePixelRatio || 1;
-  vw = r.width; vh = r.height; cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr); clampCam();
-}
-const toWorld = (sx, sy) => [cam.x + (sx - vw / 2) / cam.z, cam.y + (sy - vh / 2) / cam.z];
-function zoomAt(f, sx, sy) { const [a, b] = toWorld(sx, sy); cam.z *= f; clampCam(); const [c, d] = toWorld(sx, sy); cam.x += a - c; cam.y += b - d; clampCam(); }
-function flyTo(x, y, z) { cam.x = x; cam.y = y; if (z) cam.z = z; clampCam(); }
-function tileOutline(k, color, w) {
-  const [x, y] = k.split('_').map(Number), s = T * cam.z, sx = (x * T - cam.x) * cam.z + vw / 2, sy = (y * T - cam.y) * cam.z + vh / 2;
-  cx.strokeStyle = color; cx.lineWidth = w; cx.strokeRect(sx + w / 2, sy + w / 2, s - w, s - w);
-}
-function frame() {
-  const now = performance.now();
-  if (keys.size) {
-    const sp = 9 / cam.z * (keys.has('Shift') ? 2.2 : 1);
-    if (keys.has('a') || keys.has('ArrowLeft')) cam.x -= sp * 1.6;
-    if (keys.has('d') || keys.has('ArrowRight')) cam.x += sp * 1.6;
-    if (keys.has('w') || keys.has('ArrowUp')) cam.y -= sp * 1.6;
-    if (keys.has('s') || keys.has('ArrowDown')) cam.y += sp * 1.6;
-    clampCam();
-  }
-  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  cx.imageSmoothingEnabled = false;
-  cx.fillStyle = '#3f96c6'; cx.fillRect(0, 0, vw, vh);
-  const sw = vw / cam.z, sh = vh / cam.z;
-  cx.drawImage(world, cam.x - sw / 2, cam.y - sh / 2, sw, sh, 0, 0, vw, vh);
-  if (cam.z >= 2.2) { // light grid so plots read as plots when close
-    cx.strokeStyle = 'rgba(43,36,51,.10)'; cx.lineWidth = 1;
-    const x0 = Math.floor((cam.x - sw / 2) / T), y0 = Math.floor((cam.y - sh / 2) / T);
-    cx.beginPath();
-    for (let x = x0; x * T < cam.x + sw / 2; x++) { const s = Math.round((x * T - cam.x) * cam.z + vw / 2) + .5; cx.moveTo(s, 0); cx.lineTo(s, vh); }
-    for (let y = y0; y * T < cam.y + sh / 2; y++) { const s = Math.round((y * T - cam.y) * cam.z + vh / 2) + .5; cx.moveTo(0, s); cx.lineTo(vw, s); }
-    cx.stroke();
-  }
-  if (hover && hover !== sel) tileOutline(hover, 'rgba(255,255,255,.75)', 2);
-  if (sel) tileOutline(sel, Math.floor(now / 380) % 2 ? '#ffffff' : '#2b2433', 3);
-  drawMiniView();
-  requestAnimationFrame(frame);
-}
-// minimap
+// minimap (2D, one cell per plot)
 const mm = $('mini'), mx = mm.getContext('2d');
-const mini = document.createElement('canvas'); mini.width = MAP_W * 3; mini.height = MAP_H * 3;
+const MINI_COL = ['#7cc95a', '#3f8fd8', '#2f6a2a', '#9a9aa0', '#cfc8bc'];
 function drawMini() {
-  const m = mini.getContext('2d'); m.imageSmoothingEnabled = true; m.drawImage(world, 0, 0, mini.width, mini.height);
-  for (const [k, l] of Object.entries(land)) { const [x, y] = k.split('_').map(Number); m.fillStyle = l.owner === me ? '#f2a93b' : '#8a5a3c'; m.fillRect(x * 3, y * 3, 3, 3); }
+  const s = mm.width / N; mx.fillStyle = '#a99e90'; mx.fillRect(0, 0, mm.width, mm.height);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const l = land[key(i, j)];
+    mx.fillStyle = l ? (l.owner === me ? '#f2a93b' : '#8a5a3c') : MINI_COL[ter(i, j)];
+    mx.fillRect(i * s + .5, j * s + .5, s - 1, s - 1);
+  }
 }
 function drawMiniView() {
-  mx.imageSmoothingEnabled = false; mx.drawImage(mini, 0, 0, mm.width, mm.height);
-  const k = mm.width / WORLD_W, sw = vw / cam.z, sh = vh / cam.z;
-  mx.strokeStyle = '#ffffff'; mx.lineWidth = 2; mx.strokeRect((cam.x - sw / 2) * k, (cam.y - sh / 2) * k, sw * k, sh * k);
+  if (!controls) return;
+  drawMini();
+  const s = mm.width / WV, t = controls.target, d = camera.position.distanceTo(t), r = Math.max(4, d * .55 * s);
+  mx.strokeStyle = '#ffffff'; mx.lineWidth = 2; mx.beginPath(); mx.arc((t.x + .5) * s, (t.z + .5) * s, r, 0, 7); mx.stroke();
+  const dir = new THREE.Vector3().subVectors(t, camera.position).setY(0).normalize();
+  mx.beginPath(); mx.moveTo((t.x + .5) * s, (t.z + .5) * s); mx.lineTo((t.x + .5) * s + dir.x * r, (t.z + .5) * s + dir.z * r); mx.stroke();
 }
-function miniJump(e) { const r = mm.getBoundingClientRect(); flyTo((e.clientX - r.left) / r.width * WORLD_W, (e.clientY - r.top) / r.height * WORLD_H); }
+let miniDirty = 0;
+function miniJump(e) { const r = mm.getBoundingClientRect(); flyTo((e.clientX - r.left) / r.width * WV, (e.clientY - r.top) / r.height * WV); }
 mm.addEventListener('pointerdown', (e) => { e.stopPropagation(); mm.setPointerCapture(e.pointerId); miniJump(e); });
 mm.addEventListener('pointermove', (e) => { if (e.buttons) miniJump(e); });
 
-// input: drag to pan, wheel/pinch to zoom, click to select, WASD/arrows to move
-const keys = new Set(), ptrs = new Map();
-let drag = null, pinch = null;
-cv.addEventListener('pointerdown', (e) => {
-  cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-  if (ptrs.size === 1) drag = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y, moved: false };
-  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: cam.z }; drag = null; }
-});
-cv.addEventListener('pointermove', (e) => {
-  const r = cv.getBoundingClientRect(), sx = e.clientX - r.left, sy = e.clientY - r.top;
-  if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-  if (pinch && ptrs.size === 2) {
-    const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
-    zoomAt(pinch.z * d / pinch.d / cam.z, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top); return;
-  }
-  if (drag) {
-    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-    if (Math.abs(dx) + Math.abs(dy) > 5) drag.moved = true;
-    if (drag.moved) { cam.x = drag.cx - dx / cam.z; cam.y = drag.cy - dy / cam.z; clampCam(); cv.style.cursor = 'grabbing'; }
-  }
-  const [wx0, wy0] = toWorld(sx, sy), tx = Math.floor(wx0 / T), ty = Math.floor(wy0 / T);
-  hover = tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H ? key(tx, ty) : null;
-});
-function endPtr(e) {
-  const r = cv.getBoundingClientRect();
-  if (drag && !drag.moved && ptrs.size === 1) {
-    const [a, b] = toWorld(e.clientX - r.left, e.clientY - r.top), tx = Math.floor(a / T), ty = Math.floor(b / T);
-    if (tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H) { sel = key(tx, ty); renderPlot(); }
-  }
-  ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; if (!ptrs.size) drag = null; cv.style.cursor = '';
+// camera fly-to
+let fly = null;
+function flyTo(x, z, dist) {
+  if (!controls) return;
+  const off = new THREE.Vector3().subVectors(camera.position, controls.target);
+  if (dist) off.setLength(dist);
+  fly = { t0: performance.now(), from: controls.target.clone(), to: new THREE.Vector3(x, 1, z), offFrom: new THREE.Vector3().subVectors(camera.position, controls.target), offTo: off };
 }
-cv.addEventListener('pointerup', endPtr); cv.addEventListener('pointercancel', endPtr);
-cv.addEventListener('pointerleave', () => { hover = null; });
-cv.addEventListener('wheel', (e) => { e.preventDefault(); const r = cv.getBoundingClientRect(); zoomAt(Math.exp(-e.deltaY * .0016), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+function clampTarget() {
+  const t = controls.target, before = t.clone();
+  t.x = Math.min(WV - 1, Math.max(0, t.x)); t.z = Math.min(WV - 1, Math.max(0, t.z)); t.y = 1;
+  camera.position.add(t.clone().sub(before));
+}
+const keys = new Set();
 const typing = () => /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '');
-const MOVE = ['w', 'a', 's', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Shift'];
+const MOVE = ['w', 'a', 's', 'd', 'q', 'e', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Shift'];
 window.addEventListener('keydown', (e) => {
   if (typing()) return;
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   if (MOVE.includes(k)) { keys.add(k); if (k.startsWith('Arrow')) e.preventDefault(); }
-  if (k === '+' || k === '=') zoomAt(1.25, vw / 2, vh / 2);
-  if (k === '-') zoomAt(.8, vw / 2, vh / 2);
+  if (k === '+' || k === '=') dolly(.8);
+  if (k === '-') dolly(1.25);
   if (k === 'Escape') { sel = null; renderPlot(); }
 });
 window.addEventListener('keyup', (e) => keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key));
 window.addEventListener('blur', () => keys.clear());
-$('zin').onclick = () => zoomAt(1.4, vw / 2, vh / 2);
-$('zout').onclick = () => zoomAt(1 / 1.4, vw / 2, vh / 2);
-$('zall').onclick = () => { cam.z = minZ(); flyTo(WORLD_W / 2, WORLD_H / 2); };
+function dolly(f) { if (!controls) return; const off = camera.position.clone().sub(controls.target); off.multiplyScalar(f); const L = off.length(); if (L < controls.minDistance || L > controls.maxDistance) return; camera.position.copy(controls.target).add(off); }
+function orbit(a) { const off = camera.position.clone().sub(controls.target); off.applyAxisAngle(new THREE.Vector3(0, 1, 0), a); camera.position.copy(controls.target).add(off); }
+
+function plotAt(clientX, clientY) {
+  const r = cv.getBoundingClientRect(), v = new THREE.Vector2((clientX - r.left) / r.width * 2 - 1, -(clientY - r.top) / r.height * 2 + 1);
+  const ray = new THREE.Raycaster(); ray.setFromCamera(v, camera);
+  const hit = new THREE.Vector3(); if (!ray.ray.intersectPlane(groundPlane, hit)) return null;
+  const vx = Math.round(hit.x), vz = Math.round(hit.z);
+  if (vx % P === 0 || vz % P === 0) return null;
+  const i = Math.floor((vx - 1) / P), j = Math.floor((vz - 1) / P);
+  return i >= 0 && j >= 0 && i < N && j < N ? key(i, j) : null;
+}
+function placeBox(b, k) {
+  if (!k) { b.visible = false; return; }
+  const [i, j] = k.split('_').map(Number), [ox, oz] = origin(i, j); b.visible = true; b.position.set(ox + 2.5, 1.6, oz + 2.5);
+}
+function init3d() {
+  if (!window.THREE || !THREE.OrbitControls) { stage.insertAdjacentHTML('beforeend', '<p class="banner" style="position:absolute;inset:auto 12px 12px 12px;z-index:3">Không tải được thư viện 3D. Kiểm tra kết nối mạng rồi tải lại trang.</p>'); return; }
+  MAT = mats(buildTextures());
+  renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color('#a8d8f0'); scene.fog = new THREE.Fog('#a8d8f0', 120, 260);
+  camera = new THREE.PerspectiveCamera(45, 1, .5, 600);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7a5a, .75));
+  const sun = new THREE.DirectionalLight(0xffffff, .65); sun.position.set(-60, 100, 40); scene.add(sun);
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.MeshLambertMaterial({ color: '#3f8fd8' }));
+  sea.rotation.x = -Math.PI / 2; sea.position.set(WV / 2, -.6, WV / 2); scene.add(sea);
+  buildStatic();
+  groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1.5);
+  const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(6.08, .5, 6.08));
+  selBox = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xffffff })); selBox.visible = false; scene.add(selBox);
+  hovBox = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xffe066, transparent: true, opacity: .8 })); hovBox.visible = false; scene.add(hovBox);
+  const c = WV / 2;
+  camera.position.set(c, 42, c + 48);
+  controls = new THREE.OrbitControls(camera, cv);
+  controls.target.set(c, 1, c);
+  controls.enableDamping = true; controls.dampingFactor = .12;
+  controls.screenSpacePanning = false; controls.maxPolarAngle = 1.32; controls.minPolarAngle = .15;
+  controls.minDistance = 8; controls.maxDistance = 190;
+  controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+  controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
+  controls.update();
+  let down = null;
+  cv.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY, b: e.button }; });
+  cv.addEventListener('pointerup', (e) => {
+    if (down && down.b === 0 && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6) { sel = plotAt(e.clientX, e.clientY); renderPlot(); }
+    down = null;
+  });
+  cv.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') hover = plotAt(e.clientX, e.clientY); });
+  cv.addEventListener('pointerleave', () => (hover = null));
+  cv.addEventListener('contextmenu', (e) => e.preventDefault());
+  const resize = () => { const r = stage.getBoundingClientRect(); renderer.setSize(r.width, r.height, false); camera.aspect = r.width / Math.max(1, r.height); camera.updateProjectionMatrix(); };
+  new ResizeObserver(resize).observe(stage); resize();
+  land3dReady = true; buildDynamic();
+  let last = performance.now();
+  const loop = (now) => {
+    const dt = Math.min(.05, (now - last) / 1000); last = now;
+    if (fly) {
+      const k = Math.min(1, (now - fly.t0) / 650), e = 1 - Math.pow(1 - k, 3);
+      controls.target.lerpVectors(fly.from, fly.to, e);
+      camera.position.copy(controls.target).add(new THREE.Vector3().lerpVectors(fly.offFrom, fly.offTo, e));
+      if (k >= 1) fly = null;
+    }
+    if (keys.size) {
+      const dist = camera.position.distanceTo(controls.target), sp = dist * .9 * dt * (keys.has('Shift') ? 2.2 : 1);
+      const fwd = new THREE.Vector3().subVectors(controls.target, camera.position).setY(0).normalize(), right = new THREE.Vector3(-fwd.z, 0, fwd.x), mv = new THREE.Vector3();
+      if (keys.has('w') || keys.has('ArrowUp')) mv.add(fwd);
+      if (keys.has('s') || keys.has('ArrowDown')) mv.sub(fwd);
+      if (keys.has('d') || keys.has('ArrowRight')) mv.add(right);
+      if (keys.has('a') || keys.has('ArrowLeft')) mv.sub(right);
+      if (mv.lengthSq()) { mv.normalize().multiplyScalar(sp); controls.target.add(mv); camera.position.add(mv); }
+      if (keys.has('q')) orbit(dt * 1.6); if (keys.has('e')) orbit(-dt * 1.6);
+    }
+    controls.update(); clampTarget();
+    placeBox(selBox, sel); placeBox(hovBox, hover && hover !== sel ? hover : null);
+    selBox.material.color.set(Math.floor(now / 380) % 2 ? 0xffffff : 0x2b2433);
+    if (++miniDirty % 6 === 0) drawMiniView();
+    renderer.render(scene, camera);
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+}
+let hover = null;
+$('zin').onclick = () => dolly(.75);
+$('zout').onclick = () => dolly(1.33);
+$('zrot').onclick = () => controls && orbit(Math.PI / 4);
+$('zall').onclick = () => flyTo(WV / 2, WV / 2, 175);
 $('zhome').onclick = () => {
   const mine = Object.entries(land).filter(([, l]) => l.owner === me).map(([k]) => k.split('_').map(Number));
-  if (!mine.length) { toast('Bạn chưa có đất. Về quảng trường trung tâm.'); flyTo(WORLD_W / 2, WORLD_H / 2, 3); return; }
-  const ax = mine.reduce((s, p) => s + p[0], 0) / mine.length, ay = mine.reduce((s, p) => s + p[1], 0) / mine.length;
-  flyTo((ax + .5) * T, (ay + .5) * T, 4);
+  if (!mine.length) { toast('Bạn chưa có đất. Về quảng trường trung tâm.'); flyTo(WV / 2, WV / 2, 50); return; }
+  const ai = mine.reduce((s, p) => s + p[0], 0) / mine.length, aj = mine.reduce((s, p) => s + p[1], 0) / mine.length;
+  flyTo(1 + ai * P + 2.5, 1 + aj * P + 2.5, 32);
 };
-new ResizeObserver(resize).observe(cv);
-resize(); drawMini(); requestAnimationFrame(frame);
-function draw() { redrawLand(true); }
+drawMini();
+init3d();
 
 // ---------- Rendering ----------
 function renderWallet() {
@@ -430,11 +542,11 @@ function costText(c) { return `${c.wood} gỗ, ${c.stone} đá`; }
 function hasCost(f, c) { const i = f.inv || {}; return (i.wood || 0) >= c.wood && (i.stone || 0) >= c.stone; }
 function renderPlot() {
   const el = $('plot'), f = myFarm(), now = Date.now();
-  if (!sel) { el.innerHTML = `<h2>Ô đất</h2><p class="note">Bấm một ô cỏ trên bản đồ để xem, mua hoặc làm việc trên đó. Đã bán <b class="num">${soldCount()}</b>/${BUYABLE} ô đất cỏ.</p>`; return; }
+  if (!sel) { el.innerHTML = `<h2>Ô đất</h2><p class="note">Bấm một ô đất cỏ trên bản đồ để xem, mua hoặc làm việc trên đó. Đã bán <b class="num">${soldCount()}</b>/${BUYABLE} ô đất.</p>`; return; }
   const [x, y] = sel.split('_').map(Number), l = land[sel];
   let h = `<h2>Ô đất ${x + 1}·${y + 1}</h2>`;
   if (!l && !buyable(x, y)) {
-    const T_NAMES = { 1: 'Sông hồ', 2: 'Bãi cát', 3: 'Đường làng', 4: 'Rừng', 5: 'Quảng trường', 6: 'Cầu gỗ' };
+    const T_NAMES = { 1: 'Hồ nước', 2: 'Rừng', 3: 'Núi đá', 4: 'Quảng trường' };
     el.innerHTML = h + `<div class="kv"><span>Địa hình</span><b>${T_NAMES[ter(x, y)]}</b></div><p class="note">Khu vực chung, không bán. Chọn một ô cỏ xanh.</p>`; return;
   }
   if (!l) {
