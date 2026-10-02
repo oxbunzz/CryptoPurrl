@@ -1,16 +1,17 @@
 // CryptoPurrls — 10,000 generative 24×24 pixel cats grown from the Purrl logo.
 //
-// Every Purrl shares the exact silhouette of the logo: a 14×14 block head with
-// a tall left ear, a shorter right ear and a notched chin. The look is flat and
-// graphic: one solid background colour, a crisp ink outline, and a cat drawn in
-// two tones (base and shade) per material, so all the colour lives on the cat.
+// Purrls are small creatures shaped exactly like the logo: a 14×14 block head
+// with a tall left horn, a shorter right horn and a notched chin. The look is
+// flat and graphic: one pale background colour, a crisp ink outline, and a body
+// drawn in two tones per material, so all the colour lives on the creature.
+// There are 20 Purrls and every trait value is worn by exactly one of them.
 //
 // The whole collection is reproducible from SEED, so anyone can regenerate it
 // and check it against the provenance hash. Plain ES module with no
 // dependencies: the same file renders in Node and in the browser.
 
 export const SIZE = 24;
-export const SUPPLY = 10000;
+export const SUPPLY = 20;
 export const SEED = 0x50555252; // "PURR"
 
 export const INK = '#0b0b0d';   // logo background
@@ -231,6 +232,11 @@ const BACKGROUNDS = [
   ['Cloud', 6, flat('#f3f2f7')],
   ['Gold', 1, flat('#f7e3a3')],
   ['Pearl', 1, flat('#f6eefb')],
+  ['Aqua', 1, flat('#d2f6f6')],
+  ['Sage', 1, flat('#e2ecd8')],
+  ['Sand', 1, flat('#f3e9d6')],
+  ['Mauve', 1, flat('#efdce9')],
+  ['Butter', 1, flat('#fdf0d0')],
 ];
 
 function paintBackground(g, bg) {
@@ -238,63 +244,34 @@ function paintBackground(g, bg) {
 }
 
 // ---------------------------------------------------------------------------
-// Fur. Each fur has a base colour (expanded to a ramp), an inner-ear and nose
-// colour, and optionally a pattern (extra materials) or a procedural painter.
+// Bodies. Each has a base colour (expanded to a ramp) and optionally a
+// pattern (extra materials) or a procedural painter. Patterned bodies vary per Purrl.
 
 const FURS = {
-  Cream:     { weight: 13, base: CREAM, ear: '#f6a9b8', nose: '#e8788f' },
-  Ginger:    { weight: 12, base: '#f0913e', ear: '#ffbaa3', nose: '#c94a5a', pattern: tabby, stripe: '#b84f1c' },
-  Smoke:     { weight: 10, base: '#9ea9c8', ear: '#eeaccb', nose: '#b9708f', pattern: tabby, stripe: '#69739a' },
-  Midnight:  { weight: 9, base: '#2c2645', ear: '#7a4f86', nose: '#b0649a' },
-  Tuxedo:    { weight: 8, base: '#28243b', ear: '#7a4f86', nose: '#f08aa0', pattern: tuxedo, bib: CREAM },
-  Calico:    { weight: 7, base: '#fbf4ea', ear: '#f6a9b8', nose: '#e8788f', pattern: calico, patchA: '#f0913e', patchB: '#2c2645' },
-  Siamese:   { weight: 6, base: '#f6ead5', ear: '#5c3f35', nose: '#3a2522', pattern: siamese, point: '#5c3f35', pointLight: '#a8836a' },
-  Bubblegum: { weight: 6, base: '#ff9fd0', ear: '#ffe0f0', nose: '#e0457f' },
-  Mint:      { weight: 5, base: '#87e9cd', ear: '#ffc2d6', nose: '#e0607f' },
-  Lilac:     { weight: 5, base: '#b9a4ff', ear: '#ffc8ea', nose: '#e0609f' },
-  Tiger:     { weight: 4, base: '#ff8a1f', ear: '#ffd2a3', nose: '#c43d3d', pattern: tiger, stripe: '#2a1622', bib: '#fff1dc' },
-  Leopard:   { weight: 3, base: '#f3c55b', ear: '#ffd2a3', nose: '#b85c4a', pattern: leopard, spot: '#3a2418', spotCore: '#cf8a36' },
-  Moo:       { weight: 3, base: '#fbfbff', ear: '#ffb3c6', nose: '#ff8fae', pattern: moo, spot: '#25222f' },
-  Neon:      { weight: 3, base: '#211a3b', ear: '#ff4fd8', nose: '#ff4fd8', pattern: neon, stripeA: '#ff4fd8', stripeB: '#3ff2ff' },
-  Rainbow:   { weight: 2, base: '#ff6b8b', ear: '#ffffff', nose: '#ffffff', pattern: rainbow },
-  // Fixed supplies, rarest last.
-  Zombie:    { supply: 111, base: '#8fc27a', ear: '#d38f9a', nose: '#7a3a4a', pattern: zombie, stitch: '#3a2a3a', patch: '#79b0a8' },
-  Glitch:    { supply: 88, base: '#5b5bff', ear: '#ff3df2', nose: '#3dfcff', paint: glitchFur, post: glitchPost },
-  Lava:      { supply: 77, base: '#2e1d26', ear: '#ff7a1a', nose: '#ffb02e', paint: lavaFur },
-  Crystal:   { supply: 66, base: '#bff4ff', ear: '#ff9bd8', nose: '#7a9cff', paint: crystalFur },
-  Chrome:    { supply: 55, base: '#c8d3e0', ear: '#8fa2ba', nose: '#4a5a72', paint: chromeFur },
-  Cosmic:    { supply: 42, base: '#251654', ear: '#ff5fd2', nose: '#ff5fd2', paint: cosmicFur },
-  Gold:      { supply: 24, base: '#f0b72f', ear: '#ffe08a', nose: '#9c5a10', paint: goldFur, ramp: ['#fff0a3', '#f0b72f', '#c27a17', '#7f4211'] },
-  Void:      { supply: 13, base: '#06050b', ear: '#06050b', nose: '#1b1430', ramp: ['#17112a', '#08070f', '#040309', '#000000'], outline: '#a37bff', glow: '#8a5cff' },
-  Pearl:     { supply: 9, base: '#f8f4ff', ear: '#ffd0ea', nose: '#e88fc0', paint: pearlFur },
+  Cream:     { base: CREAM },
+  Smoke:     { base: '#9ea9c8' },
+  Midnight:  { base: '#2c2645' },
+  Bubblegum: { base: '#ff9fd0' },
+  Mint:      { base: '#87e9cd' },
+  Lilac:     { base: '#b9a4ff' },
+  Tiger:     { base: '#ff8a1f', pattern: tiger, stripe: '#2a1622', bib: '#fff1dc' },
+  Leopard:   { base: '#f3c55b', pattern: leopard, spot: '#3a2418', spotCore: '#cf8a36' },
+  Moo:       { base: '#fbfbff', pattern: moo, spot: '#25222f' },
+  Neon:      { base: '#211a3b', pattern: neon, stripeA: '#ff4fd8', stripeB: '#3ff2ff' },
+  Rainbow:   { base: '#ff6b8b', pattern: rainbow },
+  Zombie:    { base: '#8fc27a', pattern: zombie, stitch: '#3a2a3a', patch: '#79b0a8' },
+  Glitch:    { base: '#5b5bff', paint: glitchFur, post: glitchPost },
+  Lava:      { base: '#2e1d26', paint: lavaFur },
+  Crystal:   { base: '#bff4ff', paint: crystalFur },
+  Chrome:    { base: '#c8d3e0', paint: chromeFur },
+  Cosmic:    { base: '#251654', paint: cosmicFur },
+  Gold:      { base: '#f0b72f', paint: goldFur, ramp: ['#fff0a3', '#f0b72f', '#c27a17', '#7f4211'] },
+  Void:      { base: '#06050b', ramp: ['#17112a', '#08070f', '#040309', '#000000'], outline: '#a37bff', glow: '#8a5cff' },
+  Pearl:     { base: '#f8f4ff', paint: pearlFur },
 };
 for (const [name, fur] of Object.entries(FURS)) fur.name = name;
 
 // Pattern helpers write materials into the material map.
-function tabby(m, f) {
-  m.def('stripe', f.stripe);
-  m.sprite(5, 7, ['....#.##.#....', '....#....#....'], '#', 'stripe');
-  m.sprite(5, 13, ['##..........##', '..............', '#............#'], '#', 'stripe');
-  m.sprite(5, 20, ['.##........##.', '..............', '##..........##'], '#', 'stripe');
-}
-function tuxedo(m, f) {
-  m.def('bib', f.bib);
-  m.sprite(5, 8, ['......##......', '......##......', '......##......', '......##......', '.....####.....',
-    '....######....', '...########...', '...########...', '....######....'], '#', 'bib');
-  m.sprite(0, 18, ['..........####..........', '.........######.........', '.........######.........',
-    '..........####..........', '..........####..........', '...........##...........'], '#', 'bib');
-}
-function calico(m, f) {
-  m.def('a', f.patchA); m.def('b', f.patchB);
-  m.sprite(5, 4, ['aaaa..........', 'aaaa......bbbb', 'aaaa......bbbb', 'aaaaa......bbb', 'aaaa........bb', 'aa...........b'], 'ab');
-  m.sprite(5, 19, ['..bbb.........', '.bbbb....aaa..', '..bb....aaaa..', '.........aa...'], 'ab');
-}
-function siamese(m, f) {
-  m.def('p', f.point); m.def('o', f.pointLight);
-  m.sprite(5, 4, ['pppp..........', 'pppp......pppp', 'pppp......pppp', 'oooo......oooo'], 'po');
-  m.sprite(5, 11, ['.....oooo.....', '....oooooo....', '...ooppppoo...', '...ooppppoo...', '....oooooo....', '......oo......'], 'po');
-  m.sprite(5, 22, ['oooooooooooooo', 'oooooooooooooo'], 'o');
-}
 function tiger(m, f) {
   m.def('s', f.stripe); m.def('w', f.bib);
   m.sprite(5, 12, ['..............', '....wwwwww....', '...wwwwwwww...', '...wwwwwwww...', '....wwwwww....'], 'w');
@@ -388,9 +365,6 @@ function glitchPost(g) {
   }
 }
 
-function whiskers(g) {
-  for (const [x, y] of [[3, 13], [2, 13], [3, 15], [2, 16], [20, 13], [21, 13], [20, 15], [21, 16]]) g.blend(x, y, INK, 0.3);
-}
 
 // ---------------------------------------------------------------------------
 // Traits. Each option: [name, weight, draw?, flags?]
@@ -454,7 +428,6 @@ const EYES = [
 // --- Mouth (the nose is always drawn first at 11–12, 13) ---------------------------
 
 const MOUTHS = [
-  ['Purr', 26, (g) => g.sprite(9, 14, ['k.kk.k', '.k..k.'], { k: PUPIL })],
   ['Smile', 16, (g) => g.sprite(9, 14, ['k....k', '.kkkk.'], { k: PUPIL })],
   ['Blep', 14, (g) => g.sprite(9, 14, ['k.kk.k', '.kppk.', '..pP..'], { k: PUPIL, p: '#ff6f91', P: '#d94370' })],
   ['Hiss', 7, (g) => g.sprite(9, 14, ['kkkkkk', 'kwrrwk', '.kkkk.'], { k: PUPIL, w: WHITE, r: '#8e2b3a' })],
@@ -492,6 +465,21 @@ const MOUTHS = [
     'P.p..P',
     '..P...',
   ], { p: '#b066ff', P: '#7a35c9' })],
+  ['Grin', 1, (g) => g.sprite(9, 14, ['kkkkkk', 'kwwwwk', '.kkkk.'], { k: PUPIL, w: WHITE })],
+  ['Gasp', 1, (g) => g.sprite(10, 13, ['.kk.', 'krrk', 'krrk', '.kk.'], { k: PUPIL, r: '#8e2b3a' })],
+  ['Zipper', 1, (g) => g.sprite(8, 14, ['kskskskk', '.......s', '.......s'], { k: PUPIL, s: '#c9d3e6' })],
+  ['Lollipop', 1, (g) => g.sprite(9, 11, [
+    '......pPp',
+    '......PwP',
+    '......pPp',
+    'k....kw..',
+    '.kkkk.w..',
+  ], { k: PUPIL, p: '#ff5fa2', P: '#ffd23f', w: WHITE })],
+  ['Mustache', 1, (g) => g.sprite(8, 13, ['.kk..kk.', 'kkkkkkkk', 'k......k', '...kk...'], { k: '#4a2a18' })],
+  ['Buck Teeth', 1, (g) => g.sprite(9, 14, ['kkkkkk', '.kwwk.', '..ww..'], { k: PUPIL, w: WHITE })],
+  ['Kiss', 1, (g) => g.sprite(10, 13, ['.rr.', 'rRRr', 'rRRr', '.rr.'], { r: '#ff3d6e', R: '#ff9cb8' })],
+  ['Braces', 1, (g) => g.sprite(9, 14, ['kkkkkk', 'kwswsk', '.kkkk.'], { k: PUPIL, w: WHITE, s: '#9aa6c0' })],
+  ['Stitched', 1, (g) => g.sprite(9, 14, ['.k.k.k', 'kkkkkk', '.k.k.k'], { k: '#5a2a3a' })],
   ['Fire Breath', 1.5, (g) => g.sprite(10, 13, [
     '.kkk.....rr..',
     'kooookrrooorr',
@@ -552,6 +540,15 @@ const EYEWEAR = [
     g.glow(15, 11, '#ff2a3d', 0.25); g.glow(16, 11, '#ff2a3d', 0.25);
     g.set(18, 9, '#c9d3e6');
   }],
+];
+
+// Eyes and eyewear share one trait: glasses that leave the eyes visible sit over plain dot eyes.
+const dotEyes = both(irisEye(PUPIL));
+const EYE_STYLES = [
+  ...['Laser', 'Cyclops', 'Third Eye', 'Neon Glow', 'Hearts', 'Stars', 'KO', 'Void', 'Odd Eyes', 'Wink', 'Sleepy', 'Ruby', 'Ice', 'Amethyst']
+    .map((n) => EYES.find((e) => e[0] === n)),
+  ...['Shades', 'Holo Shades', '3D Glasses', 'Neon Visor'].map((n) => EYEWEAR.find((e) => e[0] === n)),
+  ...['Monocle', 'Cyber Eye'].map((n) => { const e = EYEWEAR.find((o) => o[0] === n); return [n, 1, (g) => { dotEyes(g); e[2](g); }]; }),
 ];
 
 // --- Headwear (optional). Hats sit in the logo's notch, between the ears. ----------------
@@ -658,6 +655,21 @@ const HEADWEAR = [
     ], { g: '#e6fcff', p: '#ff9fc4', P: '#d9557f', m: '#c9d3e6', M: '#7d8aa3' });
   }],
   ['Orbit', 2, (g) => orbit(g, 'front'), { back: (g) => orbit(g, 'back') }],
+  ['Sprout', 1, (g) => g.shape(10, 0, ['GG..', 'gGgg', '..gG', '..s.', '..s.', '..s.'], { g: '#5fd16a', G: '#2f9a4a', s: '#2f9a4a' })],
+  ['Propeller Cap', 1, (g) => g.sprite(8, 0, [
+    'rrrkbbbb',
+    '...k....',
+    '..kkkk..',
+    '.krryyk.',
+    'kyybbrrk',
+    'kkkkkkkk',
+  ], { k: INK, r: '#ff3d5a', b: '#3d8bff', y: '#ffd23f' })],
+  ['Bandana', 1, (g) => g.sprite(4, 7, [
+    'kkkkkkkkkkkkkkkk..',
+    'krrwwrrrrwrrrrrrkk',
+    'kkkkkkkkkkkkkkkkrk',
+    '.................k',
+  ], { k: INK, r: '#3d8bff', w: WHITE })],
 ];
 
 // A ring that circles the head: the far half is drawn behind the cat, the near half in front.
@@ -704,20 +716,40 @@ const OUTFITS = [
     for (const y of [19, 21, 23]) for (let x = 5; x < 19; x++) if (inBody(x, y)) g.blend(x, y, '#1a3f9a', 0.35);
     g.rect(11, 18, 2, 6, '#3a3a4a');
   }],
+  ['Tie-Dye', 1, (g) => {
+    const cs = ['#ff7ab8', '#ffd23f', '#3fc8ff', '#8f7bff'];
+    for (const [x, y] of CAT_CELLS) if (y >= BODY_Y) g.set(x, y, ramp(cs[Math.floor((x + 2 * y) / 3) % cs.length])[TONE[y * SIZE + x] > 1 ? 2 : 1]);
+  }],
+  ['Overalls', 1, { mat: { '#': '#3d6fff' }, rows: 'body' }, (g) => {
+    g.sprite(7, 18, ['wkwwwwwwkw', 'wkwwwwwwkw'], { w: '#fff1dc', k: '#2a4fc9' });
+    g.set(8, 20, '#ffd35a'); g.set(15, 20, '#ffd35a');
+  }],
+  ['Hawaiian Shirt', 1, { mat: { '#': '#2fc0a0' }, rows: 'body' }, (g) => {
+    for (const [x, y] of [[7, 20], [10, 22], [14, 19], [16, 22], [12, 20], [6, 22]]) { g.set(x, y, '#ff7ab8'); g.set(x + 1, y, '#ffd23f'); }
+  }],
+  ['Jersey', 1, { mat: { '#': '#e8344f' }, rows: 'body' }, (g) => {
+    g.rect(7, 18, 10, 1, WHITE);
+    g.sprite(10, 20, ['www', '..w', '.ww', '..w', 'www'].slice(0, 4), { w: WHITE });
+    g.sprite(13, 20, ['w', 'w', 'w', 'w'], { w: WHITE });
+  }],
+  ['Lab Coat', 1, { mat: { '#': '#f4f6fb' }, rows: 'body' }, (g) => {
+    g.sprite(9, 18, ['k....k', '.k..k.', '..kk..'], { k: '#9aa6c0' });
+    g.sprite(7, 20, ['b', 'b'], { b: '#3d6fff' });
+  }],
+  ['Striped Sweater', 1, { mat: { '#': '#ffd23f' }, rows: 'body' }, (g) => {
+    for (const [x, y] of CAT_CELLS) if (y === 19 || y === 21 || y === 23) g.set(x, y, '#e8344f');
+  }],
+  ['Cape', 1, { mat: { '#': '#7a2fd6' }, rows: 'body' }, (g) => {
+    g.sprite(9, 18, ['.gggg.'], { g: '#ffd35a' });
+    for (let y = 19; y < 24; y++) { g.set(y < 20 ? 7 : 6, y, '#e8344f'); g.set(y < 20 ? 16 : 17, y, '#e8344f'); }
+  }],
+  ['Medal', 1, (g) => g.sprite(10, 18, ['r..b', '.rb.', '.gg.', 'gWgg', '.gg.'], { r: '#e8344f', b: '#3d8bff', g: '#ffd35a', W: '#fff6c8' })],
   ['Rune Robe', 2, { mat: { '#': '#3a2266' }, rows: 'body' }, (g) => {
     for (const [x, y] of [[7, 20], [9, 22], [14, 20], [16, 22], [12, 21]]) { g.set(x, y, '#3ff2ff'); g.glow(x, y, '#3ff2ff', 0.2); }
     g.rect(7, 18, 10, 1, '#ffd35a');
   }],
 ];
 
-// --- Earring (optional): dangles from the right side of the head --------------------------
-
-const EARRINGS = [
-  ['None', 90],
-  ['Pearl Earring', 5, (g) => g.sprite(19, 7, ['g.', 'wp', 'pq'], { g: '#d4a93f', w: WHITE, p: '#f3eee6', q: '#c9c0d4' })],
-  ['Gold Hoop', 4, (g) => g.sprite(19, 7, ['g.', '.g', 'g.'], { g: '#ffd35a' })],
-  ['Diamond Stud', 1, (g) => { g.glow(19, 8, '#bff6ff', 0.3); g.sprite(19, 7, ['d', 'D'], { d: WHITE, D: '#8fdcf2' }); }],
-];
 
 // ---------------------------------------------------------------------------
 // Generation
@@ -733,82 +765,69 @@ export function mulberry32(seed) {
   };
 }
 
-function pick(rand, options) {
-  const total = options.reduce((s, o) => s + o[1], 0);
-  let r = rand() * total;
-  for (const o of options) if ((r -= o[1]) < 0) return o;
-  return options[options.length - 1];
-}
 
 const byName = (list) => Object.fromEntries(list.map((o) => [o[0], o]));
 const TABLES = {
   Background: byName(BACKGROUNDS),
-  Eyes: byName(EYES),
+  Eyes: byName(EYE_STYLES),
   Mouth: byName(MOUTHS),
-  Eyewear: byName(EYEWEAR),
   Headwear: byName(HEADWEAR),
   Outfit: byName(OUTFITS),
-  Earring: byName(EARRINGS),
 };
 
-export const TRAIT_TYPES = ['Fur', 'Background', 'Eyes', 'Mouth', 'Eyewear', 'Headwear', 'Outfit', 'Earring'];
+export const TRAIT_TYPES = ['Body', 'Background', 'Eyes', 'Mouth', 'Headwear', 'Outfit'];
+
+// Every trait value in these pools is worn by exactly one Purrl.
+const BODIES = ['Cream', 'Smoke', 'Midnight', 'Bubblegum', 'Mint', 'Lilac', 'Tiger', 'Leopard', 'Moo', 'Neon',
+  'Rainbow', 'Zombie', 'Glitch', 'Lava', 'Crystal', 'Chrome', 'Cosmic', 'Gold', 'Void', 'Pearl'];
+const POOLS = {
+  Body: BODIES,
+  Background: BACKGROUNDS.map((o) => o[0]),
+  Eyes: EYE_STYLES.map((o) => o[0]),
+  Mouth: MOUTHS.map((o) => o[0]),
+  Headwear: HEADWEAR.map((o) => o[0]).filter((n) => n !== 'None'),
+  Outfit: OUTFITS.map((o) => o[0]).filter((n) => n !== 'None'),
+};
 
 // Purrl #0 is the logo itself, extruded into a prism.
-export const GENESIS = { id: 0, Fur: 'Genesis', Background: 'Ink' };
+export const GENESIS = { id: 0, Body: 'Genesis', Background: 'Ink' };
 
-// Traits that would vanish into a fur of the same colour.
+// Traits that would vanish into a body of the same colour.
 const CLASHES = {
-  Gold: ['Gold Chain', 'Gold Hoop', 'Gold Grill', 'Gold', 'Lemon', 'Tangerine'],
+  Gold: ['Gold Chain', 'Gold Grill', 'Medal', 'Gold', 'Lemon', 'Tangerine', 'Butter', 'Sand'],
   Void: ['Shades', 'Void'],
   Neon: ['Neon Visor'],
-  Bubblegum: ['Bubblegum'], Mint: ['Mint'], Lilac: ['Lavender', 'Periwinkle'], Ginger: ['Tangerine'], Tiger: ['Tangerine'],
-  Cream: ['Cloud', 'Pearl'], Moo: ['Cloud', 'Pearl'], Pearl: ['Cloud', 'Pearl'], Calico: ['Cloud', 'Pearl'], Chrome: ['Armor', 'Cloud'], Smoke: ['Purrl Blue'],
+  Bubblegum: ['Bubblegum', 'Coral', 'Mauve', 'Bubblegum'],
+  Mint: ['Mint', 'Aqua', 'Sage', 'Lime'],
+  Lilac: ['Lavender', 'Periwinkle', 'Mauve'],
+  Tiger: ['Tangerine', 'Peach'],
+  Cream: ['Cloud', 'Pearl', 'Sand', 'Butter'],
+  Moo: ['Cloud', 'Pearl', 'Sand'],
+  Pearl: ['Cloud', 'Pearl', 'Lavender', 'Mauve'],
+  Chrome: ['Armor', 'Cloud'],
+  Smoke: ['Purrl Blue', 'Cloud'],
+  Crystal: ['Sky', 'Aqua'],
 };
 
-function roll(rand, fur) {
-  const clash = CLASHES[fur] ?? [];
-  const draw = (table) => {
-    let o;
-    do o = pick(rand, table); while (clash.includes(o[0]));
-    return o;
-  };
-  const t = { Fur: fur, Background: draw(BACKGROUNDS)[0] };
-  const eyes = draw(EYES);
-  // Showpiece eyes are never hidden behind glasses.
-  const eyewear = eyes[3]?.bare ? EYEWEAR[0] : draw(EYEWEAR);
-  if (!eyewear[3]?.hidesEyes) t.Eyes = eyes[0];
-  t.Mouth = draw(MOUTHS)[0];
-  t.Eyewear = eyewear[0];
-  t.Headwear = draw(HEADWEAR)[0];
-  t.Outfit = draw(OUTFITS)[0];
-  // Headphones, the eye patch strap and the cyber eye cover the right ear.
-  const earBusy = ['Headphones', 'Devil Horns'].includes(t.Headwear) || ['Eye Patch', 'Cyber Eye'].includes(t.Eyewear);
-  t.Earring = earBusy ? 'None' : draw(EARRINGS)[0];
-  return t;
-}
-
-const dna = (t) => TRAIT_TYPES.map((k) => t[k] ?? '-').join('|');
-
-// The full, deterministic collection: [{ id, Fur, Background, Eyes, ... }].
+// The full, deterministic collection: Genesis plus SUPPLY - 1 Purrls. Each pool
+// is shuffled and dealt out, so no trait value appears twice; the deal is
+// redone until no Purrl wears a trait that clashes with its body.
 export function generateCollection(seed = SEED) {
   const rand = mulberry32(seed);
-  const rare = Object.values(FURS).filter((f) => f.supply);
-  const common = Object.values(FURS).filter((f) => f.weight).map((f) => [f.name, f.weight]);
-  const furs = rare.flatMap((f) => Array(f.supply).fill(f.name));
-  while (furs.length < SUPPLY - 1) furs.push(pick(rand, common)[0]);
-  for (let i = furs.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [furs[i], furs[j]] = [furs[j], furs[i]];
+  const shuffle = (list) => {
+    const a = [...list];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+  for (;;) {
+    const dealt = Object.fromEntries(TRAIT_TYPES.map((k) => [k, shuffle(POOLS[k])]));
+    const items = [GENESIS];
+    for (let i = 0; i < SUPPLY - 1; i++) items.push({ id: i + 1, ...Object.fromEntries(TRAIT_TYPES.map((k) => [k, dealt[k][i]])) });
+    if (items.every((t) => !TRAIT_TYPES.some((k) => k !== 'Body' && CLASHES[t.Body]?.includes(t[k])))) return items;
   }
-  const seen = new Set();
-  const items = [GENESIS];
-  for (const fur of furs) {
-    let t;
-    do t = roll(rand, fur); while (seen.has(dna(t)));
-    seen.add(dna(t));
-    items.push({ id: items.length, ...t });
-  }
-  return items;
 }
 
 // ---------------------------------------------------------------------------
@@ -835,11 +854,11 @@ function genesis(g) {
 // Returns SIZE×SIZE hex colours, row-major. `stage` stops the build early.
 export function renderGrid(t, stage = STAGES.length - 1) {
   const g = new Grid(t.id ?? 0);
-  if (t.Fur === 'Genesis' || stage === 0) {
+  if (t.Body === 'Genesis' || stage === 0) {
     genesis(g);
     return g.px;
   }
-  const fur = FURS[t.Fur];
+  const fur = FURS[t.Body];
   const bg = TABLES.Background[t.Background][2];
   const option = (type) => TABLES[type][t[type] ?? 'None'];
   const traits = stage >= 4;
@@ -851,10 +870,10 @@ export function renderGrid(t, stage = STAGES.length - 1) {
   }
   if (traits) option('Headwear')[3]?.back?.(g);
 
-  // The cat: materials resolved through the tone map.
+  // The body: materials resolved through the tone map.
   const under = g.px.slice();
   const mat = new Array(SIZE * SIZE).fill(null);
-  const ramps = { fur: fur.ramp ?? ramp(fur.base), ear: ramp(fur.ear) };
+  const ramps = { fur: fur.ramp ?? ramp(fur.base) };
   const m = {
     def: (k, c) => { ramps[k] = ramp(c); },
     set: (x, y, k) => { if (inCat(x, y)) mat[y * SIZE + x] = k; },
@@ -865,8 +884,6 @@ export function renderGrid(t, stage = STAGES.length - 1) {
   for (const [x, y] of CAT_CELLS) mat[y * SIZE + x] = 'fur';
   if (stage >= 2) {
     fur.pattern?.(m, fur, g.seed);
-    m.set(6, 5, 'ear'); m.set(7, 5, 'ear'); m.set(6, 6, 'ear'); m.set(7, 6, 'ear');
-    m.set(16, 6, 'ear'); m.set(17, 6, 'ear');
     const cloth = traits && option('Outfit')[2];
     if (cloth?.mat) {
       m.def('cloth', cloth.mat['#']);
@@ -881,7 +898,6 @@ export function renderGrid(t, stage = STAGES.length - 1) {
   }
   g.outlineColor = fur.outline ?? INK;
   for (const [x, y] of OUTLINE_CELLS) g.set(x, y, g.outlineColor);
-  if (stage >= 2) whiskers(g);
 
   // Front plane.
   if (traits) {
@@ -890,13 +906,9 @@ export function renderGrid(t, stage = STAGES.length - 1) {
   }
   if (stage >= 3) {
     option('Eyes')?.[2]?.(g);
-    g.set(11, 13, ramp(fur.nose)[0]);
-    g.set(12, 13, fur.nose);
     option('Mouth')[2]?.(g);
   }
   if (traits) {
-    option('Earring')[2]?.(g);
-    option('Eyewear')[2]?.(g);
     option('Headwear')[2]?.(g);
   }
   if (stage >= 2) fur.post?.(g);
@@ -922,18 +934,12 @@ export function attributes(t) {
   return TRAIT_TYPES.filter((k) => t[k] && t[k] !== 'None').map((k) => ({ trait_type: k, value: t[k] }));
 }
 
-// Every option in every trait table, for galleries and filters.
-export const TRAITS = {
-  Fur: Object.keys(FURS),
-  ...Object.fromEntries(Object.entries(TABLES).map(([k, v]) => [k, Object.keys(v)])),
-};
-
-// Rarity tiers by fur, rarest first, with their fixed supplies.
-export const LEGENDARY = ['Genesis', ...Object.values(FURS).filter((f) => f.supply).sort((a, b) => a.supply - b.supply).map((f) => f.name)];
+// Every value of every trait, for galleries and filters.
+export const TRAITS = POOLS;
 
 // --- Rarity ------------------------------------------------------------------
 
-const ACCESSORIES = ['Eyewear', 'Headwear', 'Outfit', 'Earring'];
+const ACCESSORIES = ['Headwear', 'Outfit'];
 export const accessoryCount = (t) => ACCESSORIES.filter((k) => t[k] && t[k] !== 'None').length;
 
 // Trait counts and a rarity.tools style rank: the score sums SUPPLY / count for
