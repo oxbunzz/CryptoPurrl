@@ -38,10 +38,20 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 18px; margin: 0; 
 .chip.purr b { color: #b06d0e; }
 .chip.usdt b { color: #24745f; }
 
-.board { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
-@media (max-width: 900px) { .board { grid-template-columns: minmax(0, 1fr); } }
-.mapbox { background: #5aa64a; border: 3px solid var(--ink); box-shadow: 5px 5px 0 var(--ink); line-height: 0; position: relative; }
-canvas#map { width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; display: block; cursor: pointer; touch-action: manipulation; }
+.stage { position: relative; height: min(78vh, 820px); min-height: 440px; border: 3px solid var(--ink); box-shadow: 5px 5px 0 var(--ink); background: #3f96c6; overflow: hidden; }
+canvas#map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+.float { position: absolute; top: 12px; left: 12px; width: min(320px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow: auto; z-index: 2; }
+.ctrl { position: absolute; top: 12px; right: 12px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; z-index: 2; max-width: 50%; }
+.ctrl button { min-width: 36px; }
+#mini { position: absolute; right: 12px; bottom: 12px; width: 192px; height: 144px; border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); image-rendering: pixelated; cursor: crosshair; z-index: 2; touch-action: none; background: #3f96c6; }
+.hint { position: absolute; left: 12px; bottom: 10px; margin: 0; font-size: 12px; font-weight: 700; color: #fff; text-shadow: 1px 1px 0 var(--ink); z-index: 1; max-width: calc(100% - 230px); }
+.board { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; align-items: start; }
+@media (max-width: 640px) {
+  .stage { height: 72vh; min-height: 380px; }
+  #mini { width: 120px; height: 90px; }
+  .hint { display: none; }
+  .float { top: auto; bottom: 12px; max-height: 46%; width: calc(100% - 160px); min-width: 0; padding: 10px; }
+}
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); margin-top: 8px; }
 .legend i { display: inline-block; width: 10px; height: 10px; border: 1px solid var(--ink); margin-right: 5px; vertical-align: -1px; }
 
@@ -86,17 +96,18 @@ svg.spark { width: 100%; height: 54px; display: block; }
     <div class="wallet" id="wallet" aria-live="polite"></div>
   </header>
   <div id="banner"></div>
-  <div class="board">
-    <div>
-      <div class="mapbox"><canvas id="map" width="256" height="160" aria-label="Bản đồ đất Purrl Valley"></canvas></div>
-      <div class="legend">
-        <span><i style="background:#8fd16a"></i>Đất trống, đang bán</span>
-        <span><i style="background:#c99a6b;outline:2px solid #f2a93b;outline-offset:-3px"></i>Đất của bạn (viền vàng)</span>
-        <span><i style="background:#c99a6b"></i>Đất người khác (viền màu chủ đất)</span>
-      </div>
+  <div class="stage">
+    <canvas id="map" aria-label="Bản đồ Purrl Valley. Kéo để di chuyển, cuộn để phóng to."></canvas>
+    <section class="card float" id="plot"></section>
+    <div class="ctrl" role="group" aria-label="Điều khiển camera">
+      <button id="zin" aria-label="Phóng to">+</button><button id="zout" aria-label="Thu nhỏ">−</button>
+      <button id="zall">Toàn cảnh</button><button id="zhome">Đất của tôi</button>
     </div>
+    <canvas id="mini" width="192" height="144" aria-label="Bản đồ thu nhỏ, bấm để nhảy tới"></canvas>
+    <p class="hint">Kéo chuột hoặc WASD để di chuyển · cuộn hoặc chụm hai ngón để phóng to · bấm một ô để chọn</p>
+  </div>
+  <div class="board">
     <aside class="side">
-      <section class="card" id="plot"></section>
       <section class="card" id="shop"></section>
       <section class="card" id="market"></section>
       <section class="card" id="board"></section>
@@ -117,9 +128,9 @@ svg.spark { width: 100%; height: 54px; display: block; }
 
 <script>
 // ---------- Game rules (prototype numbers, coin is play money) ----------
-const MAP_W = 16, MAP_H = 10, T = 16;
+const MAP_W = 64, MAP_H = 48, T = 16;
 const START = { purr: 500, usdt: 100 };
-const LAND_BASE = 100, LAND_STEP = 5;               // land price rises with every plot sold
+const LAND_BASE = 100, LAND_STEP = 2;               // land price rises with every plot sold
 const CLAIM_CD = 10 * 60 * 1000, CLAIM_FEE = 0.05;
 const POOL0 = { purr: 100000, usdt: 10000 };         // exchange pool opening reserves, price 0.1
 const SWAP_FEE = 0.003;
@@ -162,76 +173,241 @@ function pendingNow(f, now = Date.now()) { return (f.pending || 0) + houseRate(f
 function clone(o) { return JSON.parse(JSON.stringify(o)); }
 function accrued(f) { const g = clone(f), now = Date.now(); g.pending = pendingNow(f, now); g.accrueAt = now; return g; }
 
-// ---------- Pixel art ----------
-const cv = $('map'), cx = cv.getContext('2d');
-cv.width = MAP_W * T; cv.height = MAP_H * T;
+// ---------- World: terrain, pixel art, camera ----------
+const WORLD_W = MAP_W * T, WORLD_H = MAP_H * T;
 function hash(a, b, c = 0) { let h = (a * 374761393 + b * 668265263 + c * 2147483647) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
-function px(x, y, c) { cx.fillStyle = c; cx.fillRect(x, y, 1, 1); }
+function vnoise(x, y, s, seed) {
+  const gx = x / s, gy = y / s, x0 = Math.floor(gx), y0 = Math.floor(gy), fx = gx - x0, fy = gy - y0;
+  const sm = (t) => t * t * (3 - 2 * t), a = hash(x0, y0, seed), b = hash(x0 + 1, y0, seed), c = hash(x0, y0 + 1, seed), d = hash(x0 + 1, y0 + 1, seed);
+  return (a + (b - a) * sm(fx)) + ((c + (d - c) * sm(fx)) - (a + (b - a) * sm(fx))) * sm(fy);
+}
+// terrain: 0 grass (buyable), 1 water, 2 sand, 3 road, 4 forest, 5 plaza, 6 bridge
+const TER = new Uint8Array(MAP_W * MAP_H);
+const ter = (x, y) => (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H ? 1 : TER[y * MAP_W + x]);
+(function genWorld() {
+  const CX = MAP_W / 2, CY = MAP_H / 2;
+  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
+    let t = 0;
+    const lake = vnoise(x, y, 9, 1) * .7 + vnoise(x, y, 4, 2) * .3;
+    const edge = Math.min(x, y, MAP_W - 1 - x, MAP_H - 1 - y);
+    const riverX = 46 + Math.round(3 * Math.sin(y / 5) + 2 * Math.sin(y / 2.3));
+    if (lake < .26 || edge < 1 || (x >= riverX && x <= riverX + 1)) t = 1;
+    else if (vnoise(x, y, 6, 3) > .66 || edge < 3 && hash(x, y, 4) < .55) t = 4;
+    if (Math.abs(x - CX) <= 2 && Math.abs(y - CY) <= 2) t = 5;
+    else if (t !== 1 && (y % 12 === 6 || x % 16 === 8) && edge >= 1) t = 3;
+    else if (t === 1 && (y % 12 === 6 || x % 16 === 8) && edge >= 2 && lake >= .2) t = 6;
+    TER[y * MAP_W + x] = t;
+  }
+  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) if (TER[y * MAP_W + x] === 0 || TER[y * MAP_W + x] === 4) {
+    if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => ter(x + a, y + b) === 1)) TER[y * MAP_W + x] = 2;
+  }
+})();
+const buyable = (x, y) => ter(x, y) === 0;
+let BUYABLE = 0; for (const t of TER) if (t === 0) BUYABLE++;
+
+const world = document.createElement('canvas'); world.width = WORLD_W; world.height = WORLD_H;
+const wx = world.getContext('2d');
+function px(x, y, c) { wx.fillStyle = c; wx.fillRect(x, y, 1, 1); }
 function sprite(ox, oy, rows, pal) { rows.forEach((r, y) => [...r].forEach((ch, x) => { if (pal[ch]) px(ox + x, oy + y, pal[ch]); })); }
 const HOUSE_ART = [
-  '................',
-  '..KK............',
-  '.KRRK......KK...',
-  '.KRRK.....KRRK..',
-  '.KRRRKKKKKKRRRK.',
-  '.KRRRRRRRRRRRRK.',
-  'KRRRRRRRRRRRRRRK',
-  'KKKKKKKKKKKKKKKK',
-  '.KWWWWWWWWWWWWK.',
-  '.KWBBWWWWWDDWWK.',
-  '.KWBBWWWWWDDWWK.',
-  '.KWWWWWWWWDdWWK.',
-  '.KWWWWWWWWDDWWK.',
-  '.KKKKKKKKKKKKKK.',
-  '................',
-  '................',
+  '................', '..KK............', '.KRRK......KK...', '.KRRK.....KRRK..',
+  '.KRRRKKKKKKRRRK.', '.KRRRRRRRRRRRRK.', 'KRRRRRRRRRRRRRRK', 'KKKKKKKKKKKKKKKK',
+  '.KWWWWWWWWWWWWK.', '.KWBBWWWWWDDWWK.', '.KWBBWWWWWDDWWK.', '.KWWWWWWWWDdWWK.',
+  '.KWWWWWWWWDDWWK.', '.KKKKKKKKKKKKKK.', '................', '................',
 ];
+const TREE = ['....KKKK....', '..KKggggKK..', '.KgggGggggK.', 'KggGgggggGgK', 'KgggggGggggK', 'KgGggggggGgK', '.KggggGgggK.', '..KKggggKK..', '....KttK....', '....KttK....', '.....KK.....'];
 const ROOFS = [null, '#a8724c', '#d6455a', '#7a4ad6'];
 const PLANT = {
-  seed:    ['     ', '     ', '  s  ', '     ', '     '],
-  sprout:  ['     ', '  g  ', ' g g ', '  g  ', '     '],
-  grow:    [' g g ', '  g  ', ' ggg ', '  g  ', '     '],
-  carrot:  [' g g ', '  g  ', ' ooo ', '  o  ', '     '],
-  tomato:  [' grg ', 'grgrg', ' ggg ', '  g  ', '     '],
-  pumpkin: ['  g  ', ' ooo ', 'ooooo', ' ooo ', '     '],
+  seed: ['     ', '     ', '  s  ', '     ', '     '], sprout: ['     ', '  g  ', ' g g ', '  g  ', '     '],
+  grow: [' g g ', '  g  ', ' ggg ', '  g  ', '     '], carrot: [' g g ', '  g  ', ' ooo ', '  o  ', '     '],
+  tomato: [' grg ', 'grgrg', ' ggg ', '  g  ', '     '], pumpkin: ['  g  ', ' ooo ', 'ooooo', ' ooo ', '     '],
 };
-function drawTile(x, y, now) {
-  const ox = x * T, oy = y * T, k = key(x, y), l = land[k];
-  // grass
-  cx.fillStyle = '#8fd16a'; cx.fillRect(ox, oy, T, T);
-  for (let i = 0; i < 10; i++) px(ox + Math.floor(hash(x, y, i) * T), oy + Math.floor(hash(y, x, i + 7) * T), hash(x, y, i + 99) < .5 ? '#7cc05a' : '#a6e07c');
+function speckle(ox, oy, x, y, base, a, b, n) { wx.fillStyle = base; wx.fillRect(ox, oy, T, T); for (let i = 0; i < n; i++) px(ox + Math.floor(hash(x, y, i) * T), oy + Math.floor(hash(y, x, i + 7) * T), hash(x, y, i + 99) < .5 ? a : b); }
+function drawTerrain(x, y) {
+  const ox = x * T, oy = y * T, t = ter(x, y);
+  if (t === 1) {
+    speckle(ox, oy, x, y, '#4fa8d8', '#62b8e4', '#3f96c6', 6);
+    for (let i = 0; i < 2; i++) { const a = Math.floor(hash(x, y, 40 + i) * 12), b = Math.floor(hash(x, y, 50 + i) * 14); wx.fillStyle = '#9ad6f2'; wx.fillRect(ox + a, oy + b, 3, 1); }
+  } else if (t === 2) speckle(ox, oy, x, y, '#f0d9a0', '#e6c98a', '#f8e6b8', 10);
+  else if (t === 3 || t === 5) {
+    speckle(ox, oy, x, y, t === 5 ? '#d8d0c4' : '#c9b48e', t === 5 ? '#c4bcb0' : '#b8a27a', t === 5 ? '#e8e2d8' : '#d8c6a0', 14);
+    if (t === 5) { wx.fillStyle = '#b8b0a4'; for (let i = 0; i < T; i += 4) { wx.fillRect(ox + i, oy, 1, T); wx.fillRect(ox, oy + i, T, 1); } }
+  } else if (t === 6) {
+    wx.fillStyle = '#4fa8d8'; wx.fillRect(ox, oy, T, T); wx.fillStyle = '#a8724c'; wx.fillRect(ox + 2, oy, 12, T);
+    wx.fillStyle = '#8a5a3c'; for (let i = 0; i < T; i += 3) wx.fillRect(ox + 2, oy + i, 12, 1); wx.fillRect(ox + 1, oy, 1, T); wx.fillRect(ox + 14, oy, 1, T);
+  } else {
+    speckle(ox, oy, x, y, '#8fd16a', '#7cc05a', '#a6e07c', 10);
+    if (hash(x, y, 77) < .12) { px(ox + 4, oy + 5, '#ff8fc8'); px(ox + 11, oy + 10, '#fff2a8'); }
+    if (t === 4) sprite(ox + 2, oy + 2, TREE, { K: '#2b4a2a', g: '#4f9a44', G: '#6fbc5a', t: '#7a4a2c' });
+  }
+}
+function drawPlot(x, y, now) {
+  const k = key(x, y), l = land[k];
+  drawTerrain(x, y);
   if (!l) return;
-  // owned soil with fence in the owner's colour
-  cx.fillStyle = '#c99a6b'; cx.fillRect(ox + 1, oy + 1, T - 2, T - 2);
-  cx.fillStyle = '#b4875a'; for (let r = 3; r < T - 2; r += 3) cx.fillRect(ox + 2, oy + r, T - 4, 1);
-  const fence = l.owner === me ? '#f2a93b' : (colors[l.owner] || '#6f6878');
-  cx.strokeStyle = fence; cx.lineWidth = 1; cx.strokeRect(ox + .5, oy + .5, T - 1, T - 1);
+  const ox = x * T, oy = y * T;
+  wx.fillStyle = '#c99a6b'; wx.fillRect(ox + 1, oy + 1, T - 2, T - 2);
+  wx.fillStyle = '#b4875a'; for (let r = 3; r < T - 2; r += 3) wx.fillRect(ox + 2, oy + r, T - 4, 1);
+  wx.strokeStyle = l.owner === me ? '#f2a93b' : (colors[l.owner] || '#6f6878'); wx.lineWidth = 1; wx.strokeRect(ox + .5, oy + .5, T - 1, T - 1);
   [[0, 0], [T - 1, 0], [0, T - 1], [T - 1, T - 1]].forEach(([a, b]) => px(ox + a, oy + b, '#2b2433'));
   const f = farms[l.owner], p = f && f.plots && f.plots[k];
   if (!p) return;
   if (p.kind === 'house') {
     sprite(ox, oy, HOUSE_ART, { K: '#2b2433', R: ROOFS[p.level], W: '#fff4dc', B: '#7fd6ff', D: '#8a5a3c', d: '#ffd23f' });
-    if (p.level >= 2) { px(ox + 12, oy + 1, '#2b2433'); px(ox + 12, oy + 2, '#2b2433'); px(ox + 13, oy + 0, '#cfc8d6'); }
+    if (p.level >= 2) { px(ox + 12, oy + 1, '#2b2433'); px(ox + 12, oy + 2, '#2b2433'); }
     if (p.level >= 3) { px(ox + 2, oy + 0, '#ffd23f'); px(ox + 3, oy + 0, '#ffd23f'); }
   } else if (p.kind === 'crop') {
     const c = CROPS[p.crop], t = (now - p.plantedAt) / c.grow;
     const stage = t >= 1 ? p.crop : t > .6 ? 'grow' : t > .25 ? 'sprout' : 'seed';
     const pal = { g: '#3f8a3a', s: '#6b4a2a', o: p.crop === 'carrot' ? '#ff8a1f' : '#f28a1f', r: '#e8344f' };
     [[2, 2], [9, 2], [2, 9], [9, 9]].forEach(([a, b]) => sprite(ox + a, oy + b, PLANT[stage], pal));
-    if (t >= 1 && Math.floor(now / 500) % 2) { px(ox + 7, oy + 1, '#fff'); px(ox + 8, oy + 1, '#fff'); }
+    if (t >= 1) { px(ox + 7, oy + 1, '#ffffff'); px(ox + 8, oy + 1, '#ffffff'); px(ox + 7, oy + 0, '#ffd23f'); }
   }
 }
-function draw() {
-  const now = Date.now();
-  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) drawTile(x, y, now);
-  if (sel) { const [x, y] = sel.split('_').map(Number); cx.strokeStyle = Math.floor(now / 400) % 2 ? '#ffffff' : '#2b2433'; cx.lineWidth = 1; cx.strokeRect(x * T + .5, y * T + .5, T - 1, T - 1); }
+// fountain + Purrl statue in the town square
+function drawPlaza() {
+  const cx0 = (MAP_W / 2) * T - 8, cy0 = (MAP_H / 2) * T - 8;
+  wx.fillStyle = '#2b2433'; wx.beginPath(); wx.arc(cx0 + 8, cy0 + 8, 13, 0, 7); wx.fill();
+  wx.fillStyle = '#4fa8d8'; wx.beginPath(); wx.arc(cx0 + 8, cy0 + 8, 12, 0, 7); wx.fill();
+  sprite(cx0 + 2, cy0 - 1, ['KKKK....KKKK', 'KCCK....KCCK', 'KCCKKKKKKCCK', 'KCCCCCCCCCCK', 'KCCkCCCCkCCK', 'KCCCCCCCCCCK', 'KCCCCkkCCCCK', 'KCCCCCCCCCCK', '.KCCCCCCCCK.', '..KKKKKKKK..'].map((r) => r), { K: '#2b2433', C: '#f4e9d0', k: '#2b2433' });
 }
-cv.addEventListener('click', (e) => {
-  const r = cv.getBoundingClientRect();
-  const x = Math.floor((e.clientX - r.left) / r.width * MAP_W), y = Math.floor((e.clientY - r.top) / r.height * MAP_H);
-  if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) return;
-  sel = key(x, y); draw(); renderPlot();
+let landDrawn = new Set();
+function redrawLand(all) {
+  const now = Date.now(), want = new Set(Object.keys(land));
+  const todo = all ? want : new Set([...want, ...landDrawn]);
+  for (const k of todo) { const [x, y] = k.split('_').map(Number); drawPlot(x, y, now); }
+  landDrawn = want; drawMini();
+}
+function redrawCrops() {
+  const now = Date.now();
+  for (const [k, l] of Object.entries(land)) { const p = farms[l.owner] && farms[l.owner].plots && farms[l.owner].plots[k]; if (p && p.kind === 'crop') { const [x, y] = k.split('_').map(Number); drawPlot(x, y, now); } }
+}
+for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) drawTerrain(x, y);
+drawPlaza();
+
+// camera
+const cv = $('map'), cx = cv.getContext('2d');
+const cam = { x: WORLD_W / 2, y: WORLD_H / 2, z: 3 };
+let vw = 0, vh = 0, dpr = 1, hover = null;
+const minZ = () => Math.max(vw / WORLD_W, vh / WORLD_H);
+function clampCam() {
+  cam.z = Math.min(10, Math.max(minZ(), cam.z));
+  const hw = vw / 2 / cam.z, hh = vh / 2 / cam.z;
+  cam.x = Math.min(WORLD_W - hw, Math.max(hw, cam.x)); cam.y = Math.min(WORLD_H - hh, Math.max(hh, cam.y));
+}
+function resize() {
+  const r = cv.getBoundingClientRect(); dpr = window.devicePixelRatio || 1;
+  vw = r.width; vh = r.height; cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr); clampCam();
+}
+const toWorld = (sx, sy) => [cam.x + (sx - vw / 2) / cam.z, cam.y + (sy - vh / 2) / cam.z];
+function zoomAt(f, sx, sy) { const [a, b] = toWorld(sx, sy); cam.z *= f; clampCam(); const [c, d] = toWorld(sx, sy); cam.x += a - c; cam.y += b - d; clampCam(); }
+function flyTo(x, y, z) { cam.x = x; cam.y = y; if (z) cam.z = z; clampCam(); }
+function tileOutline(k, color, w) {
+  const [x, y] = k.split('_').map(Number), s = T * cam.z, sx = (x * T - cam.x) * cam.z + vw / 2, sy = (y * T - cam.y) * cam.z + vh / 2;
+  cx.strokeStyle = color; cx.lineWidth = w; cx.strokeRect(sx + w / 2, sy + w / 2, s - w, s - w);
+}
+function frame() {
+  const now = performance.now();
+  if (keys.size) {
+    const sp = 9 / cam.z * (keys.has('Shift') ? 2.2 : 1);
+    if (keys.has('a') || keys.has('ArrowLeft')) cam.x -= sp * 1.6;
+    if (keys.has('d') || keys.has('ArrowRight')) cam.x += sp * 1.6;
+    if (keys.has('w') || keys.has('ArrowUp')) cam.y -= sp * 1.6;
+    if (keys.has('s') || keys.has('ArrowDown')) cam.y += sp * 1.6;
+    clampCam();
+  }
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cx.imageSmoothingEnabled = false;
+  cx.fillStyle = '#3f96c6'; cx.fillRect(0, 0, vw, vh);
+  const sw = vw / cam.z, sh = vh / cam.z;
+  cx.drawImage(world, cam.x - sw / 2, cam.y - sh / 2, sw, sh, 0, 0, vw, vh);
+  if (cam.z >= 2.2) { // light grid so plots read as plots when close
+    cx.strokeStyle = 'rgba(43,36,51,.10)'; cx.lineWidth = 1;
+    const x0 = Math.floor((cam.x - sw / 2) / T), y0 = Math.floor((cam.y - sh / 2) / T);
+    cx.beginPath();
+    for (let x = x0; x * T < cam.x + sw / 2; x++) { const s = Math.round((x * T - cam.x) * cam.z + vw / 2) + .5; cx.moveTo(s, 0); cx.lineTo(s, vh); }
+    for (let y = y0; y * T < cam.y + sh / 2; y++) { const s = Math.round((y * T - cam.y) * cam.z + vh / 2) + .5; cx.moveTo(0, s); cx.lineTo(vw, s); }
+    cx.stroke();
+  }
+  if (hover && hover !== sel) tileOutline(hover, 'rgba(255,255,255,.75)', 2);
+  if (sel) tileOutline(sel, Math.floor(now / 380) % 2 ? '#ffffff' : '#2b2433', 3);
+  drawMiniView();
+  requestAnimationFrame(frame);
+}
+// minimap
+const mm = $('mini'), mx = mm.getContext('2d');
+const mini = document.createElement('canvas'); mini.width = MAP_W * 3; mini.height = MAP_H * 3;
+function drawMini() {
+  const m = mini.getContext('2d'); m.imageSmoothingEnabled = true; m.drawImage(world, 0, 0, mini.width, mini.height);
+  for (const [k, l] of Object.entries(land)) { const [x, y] = k.split('_').map(Number); m.fillStyle = l.owner === me ? '#f2a93b' : '#8a5a3c'; m.fillRect(x * 3, y * 3, 3, 3); }
+}
+function drawMiniView() {
+  mx.imageSmoothingEnabled = false; mx.drawImage(mini, 0, 0, mm.width, mm.height);
+  const k = mm.width / WORLD_W, sw = vw / cam.z, sh = vh / cam.z;
+  mx.strokeStyle = '#ffffff'; mx.lineWidth = 2; mx.strokeRect((cam.x - sw / 2) * k, (cam.y - sh / 2) * k, sw * k, sh * k);
+}
+function miniJump(e) { const r = mm.getBoundingClientRect(); flyTo((e.clientX - r.left) / r.width * WORLD_W, (e.clientY - r.top) / r.height * WORLD_H); }
+mm.addEventListener('pointerdown', (e) => { e.stopPropagation(); mm.setPointerCapture(e.pointerId); miniJump(e); });
+mm.addEventListener('pointermove', (e) => { if (e.buttons) miniJump(e); });
+
+// input: drag to pan, wheel/pinch to zoom, click to select, WASD/arrows to move
+const keys = new Set(), ptrs = new Map();
+let drag = null, pinch = null;
+cv.addEventListener('pointerdown', (e) => {
+  cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (ptrs.size === 1) drag = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y, moved: false };
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: cam.z }; drag = null; }
 });
+cv.addEventListener('pointermove', (e) => {
+  const r = cv.getBoundingClientRect(), sx = e.clientX - r.left, sy = e.clientY - r.top;
+  if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pinch && ptrs.size === 2) {
+    const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+    zoomAt(pinch.z * d / pinch.d / cam.z, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top); return;
+  }
+  if (drag) {
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 5) drag.moved = true;
+    if (drag.moved) { cam.x = drag.cx - dx / cam.z; cam.y = drag.cy - dy / cam.z; clampCam(); cv.style.cursor = 'grabbing'; }
+  }
+  const [wx0, wy0] = toWorld(sx, sy), tx = Math.floor(wx0 / T), ty = Math.floor(wy0 / T);
+  hover = tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H ? key(tx, ty) : null;
+});
+function endPtr(e) {
+  const r = cv.getBoundingClientRect();
+  if (drag && !drag.moved && ptrs.size === 1) {
+    const [a, b] = toWorld(e.clientX - r.left, e.clientY - r.top), tx = Math.floor(a / T), ty = Math.floor(b / T);
+    if (tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H) { sel = key(tx, ty); renderPlot(); }
+  }
+  ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; if (!ptrs.size) drag = null; cv.style.cursor = '';
+}
+cv.addEventListener('pointerup', endPtr); cv.addEventListener('pointercancel', endPtr);
+cv.addEventListener('pointerleave', () => { hover = null; });
+cv.addEventListener('wheel', (e) => { e.preventDefault(); const r = cv.getBoundingClientRect(); zoomAt(Math.exp(-e.deltaY * .0016), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+const typing = () => /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '');
+const MOVE = ['w', 'a', 's', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Shift'];
+window.addEventListener('keydown', (e) => {
+  if (typing()) return;
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (MOVE.includes(k)) { keys.add(k); if (k.startsWith('Arrow')) e.preventDefault(); }
+  if (k === '+' || k === '=') zoomAt(1.25, vw / 2, vh / 2);
+  if (k === '-') zoomAt(.8, vw / 2, vh / 2);
+  if (k === 'Escape') { sel = null; renderPlot(); }
+});
+window.addEventListener('keyup', (e) => keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key));
+window.addEventListener('blur', () => keys.clear());
+$('zin').onclick = () => zoomAt(1.4, vw / 2, vh / 2);
+$('zout').onclick = () => zoomAt(1 / 1.4, vw / 2, vh / 2);
+$('zall').onclick = () => { cam.z = minZ(); flyTo(WORLD_W / 2, WORLD_H / 2); };
+$('zhome').onclick = () => {
+  const mine = Object.entries(land).filter(([, l]) => l.owner === me).map(([k]) => k.split('_').map(Number));
+  if (!mine.length) { toast('Bạn chưa có đất. Về quảng trường trung tâm.'); flyTo(WORLD_W / 2, WORLD_H / 2, 3); return; }
+  const ax = mine.reduce((s, p) => s + p[0], 0) / mine.length, ay = mine.reduce((s, p) => s + p[1], 0) / mine.length;
+  flyTo((ax + .5) * T, (ay + .5) * T, 4);
+};
+new ResizeObserver(resize).observe(cv);
+resize(); drawMini(); requestAnimationFrame(frame);
+function draw() { redrawLand(true); }
 
 // ---------- Rendering ----------
 function renderWallet() {
@@ -254,9 +430,13 @@ function costText(c) { return `${c.wood} gỗ, ${c.stone} đá`; }
 function hasCost(f, c) { const i = f.inv || {}; return (i.wood || 0) >= c.wood && (i.stone || 0) >= c.stone; }
 function renderPlot() {
   const el = $('plot'), f = myFarm(), now = Date.now();
-  if (!sel) { el.innerHTML = `<h2>Ô đất</h2><p class="note">Bấm một ô trên bản đồ để xem, mua hoặc làm việc trên đó. Đã bán <b class="num">${soldCount()}</b>/${MAP_W * MAP_H} ô.</p>`; return; }
+  if (!sel) { el.innerHTML = `<h2>Ô đất</h2><p class="note">Bấm một ô cỏ trên bản đồ để xem, mua hoặc làm việc trên đó. Đã bán <b class="num">${soldCount()}</b>/${BUYABLE} ô đất cỏ.</p>`; return; }
   const [x, y] = sel.split('_').map(Number), l = land[sel];
   let h = `<h2>Ô đất ${x + 1}·${y + 1}</h2>`;
+  if (!l && !buyable(x, y)) {
+    const T_NAMES = { 1: 'Sông hồ', 2: 'Bãi cát', 3: 'Đường làng', 4: 'Rừng', 5: 'Quảng trường', 6: 'Cầu gỗ' };
+    el.innerHTML = h + `<div class="kv"><span>Địa hình</span><b>${T_NAMES[ter(x, y)]}</b></div><p class="note">Khu vực chung, không bán. Chọn một ô cỏ xanh.</p>`; return;
+  }
   if (!l) {
     const pr = landPrice();
     h += `<div class="kv"><span>Giá hiện tại</span><b class="num">${fmt(pr, 0)} PURR</b></div>
@@ -370,6 +550,7 @@ const actions = {
   }),
   buyLand: () => act(async () => {
     const k = sel, pr = landPrice(), f = accrued(myFarm());
+    { const [x, y] = k.split('_').map(Number); if (!buyable(x, y)) fail('Ô này không bán.'); }
     if (f.purr < pr) fail('Không đủ PURR.');
     const ref = db.doc('land/' + k);
     await lease(ref);
@@ -451,15 +632,15 @@ document.addEventListener('input', (e) => { if (e.target.id === 'amt') quote(); 
 
 // ---------- Live data ----------
 renderAll();
-setInterval(() => { draw(); renderWallet(); if (sel && !busy) renderPlot(); }, 1000);
+setInterval(() => { redrawCrops(); renderWallet(); if (sel && !busy) renderPlot(); }, 1000);
 (async () => {
   if (!window.claude) return;
   [db, user] = await Promise.all([claude.use('db'), claude.use('user')]);
   if (user) { me = await user.id(); canWrite = await user.can('data.write'); }
   if (!db) { renderAll(); return; }
   if (!me) { db = null; renderAll(); return; }
-  db.collection('land').onSnapshot((s) => { land = {}; s.docs.forEach((d) => { const v = d.data(); if (v && v.owner) land[d.id] = v; }); draw(); renderPlot(); renderBoard(); }, (e) => console.error(e));
-  db.collection('farms').onSnapshot((s) => { const n = {}; s.docs.forEach((d) => (n[d.id] = d.data())); farms = n; renderBanner(); renderWallet(); renderPlot(); renderShop(); renderBoard(); }, (e) => console.error(e));
+  db.collection('land').onSnapshot((s) => { land = {}; s.docs.forEach((d) => { const v = d.data(); if (v && v.owner) land[d.id] = v; }); redrawLand(false); renderPlot(); renderBoard(); }, (e) => console.error(e));
+  db.collection('farms').onSnapshot((s) => { const n = {}; s.docs.forEach((d) => (n[d.id] = d.data())); farms = n; redrawLand(true); renderBanner(); renderWallet(); renderPlot(); renderShop(); renderBoard(); }, (e) => console.error(e));
   db.doc('market/pool').onSnapshot((s) => { pool = s.exists ? s.data() : null; renderWallet(); const v = ($('amt') || {}).value; renderMarket(); if ($('amt')) { $('amt').value = v; quote(); } }, (e) => console.error(e));
   renderAll();
 })();
