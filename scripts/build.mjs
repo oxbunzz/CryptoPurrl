@@ -24,7 +24,7 @@ const { counts } = rarity(collection);
 writeJSON('rarity.json', counts);
 writeFileSync(path('purrls.json'), '[\n' + collection.map((t) => JSON.stringify(t)).join(',\n') + '\n]\n');
 
-// --- The mosaic: every Purrl at 1×, 5 per row (120×96).
+// --- The mosaic: every Purrl at 1×, 5 per row (160×128).
 const COLS = 5, W = COLS * SIZE, H = Math.ceil(SUPPLY / COLS) * SIZE;
 const mosaic = new Uint8Array(W * H * 4);
 pixels.forEach((px, id) => {
@@ -40,7 +40,7 @@ const provenance = {
   seed: '0x' + SEED.toString(16),
   // sha256 over the concatenated per-Purrl sha256 hex digests, in id order.
   provenanceHash: sha256(pixels.map((px) => sha256(px)).join('')),
-  // sha256 of the mosaic's raw RGBA pixels (row-major, 120×96).
+  // sha256 of the mosaic's raw RGBA pixels (row-major, 160×128).
   mosaicSha256: sha256(mosaic),
 };
 writeJSON('provenance.json', provenance);
@@ -68,12 +68,12 @@ if (process.argv.includes('--all')) {
   mkdirSync(path('images'), { recursive: true });
   mkdirSync(path('metadata'), { recursive: true });
   for (const t of collection) {
-    writeFileSync(path(`images/${t.id}.png`), encodePNG(480, 480, upscale(SIZE, SIZE, pixels[t.id], 20)));
+    writeFileSync(path(`images/${t.id}.png`), encodePNG(480, 480, upscale(SIZE, SIZE, pixels[t.id], 15)));
     writeJSON(`metadata/${t.id}.json`, {
       name: `CryptoPurrl #${t.id}`,
       description: t.id === 0
         ? 'Genesis. The Purrl logo itself, the silhouette every other Purrl is grown from.'
-        : 'One of 20 CryptoPurrls: 24×24 pixel creatures grown from the Purrl logo. Every trait is a 1/1.',
+        : 'One of 20 CryptoPurrls: 32×32 hand-designed pixel characters grown from the Purrl logo. Every trait is a 1/1.',
       image: `ipfs://<IMAGES_CID>/${t.id}.png`,
       attributes: attributes(t),
     });
