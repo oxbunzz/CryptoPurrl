@@ -1,0 +1,98 @@
+{
+  "Fur": {
+    "Genesis": 1,
+    "Blue": 796,
+    "Cream": 2030,
+    "Midnight": 1215,
+    "Silver": 1442,
+    "Zombie": 88,
+    "Siamese": 819,
+    "Ginger": 1797,
+    "Tuxedo": 998,
+    "Calico": 781,
+    "Gold": 24,
+    "Pearl": 9
+  },
+  "Background": {
+    "Ink": 1,
+    "Sky": 1020,
+    "Blush": 1168,
+    "Sage": 1198,
+    "Purrl Blue": 1504,
+    "Terracotta": 801,
+    "Lilac": 967,
+    "Mint": 1021,
+    "Butter": 1165,
+    "Gold Leaf": 108,
+    "Fog": 849,
+    "Pearl": 198
+  },
+  "Eyes": {
+    "None": 2175,
+    "Amethyst": 464,
+    "Amber": 1592,
+    "Copper": 1075,
+    "Wink": 320,
+    "Odd Eyes": 376,
+    "Sleepy": 758,
+    "Emerald": 1765,
+    "Sapphire": 1384,
+    "Laser": 91
+  },
+  "Mouth": {
+    "None": 1,
+    "Purr": 3408,
+    "Bubblegum": 881,
+    "Smile": 2052,
+    "Pipe": 698,
+    "Hiss": 850,
+    "Blep": 1693,
+    "Fish": 417
+  },
+  "Eyewear": {
+    "None": 6008,
+    "Shades": 970,
+    "Monocle": 511,
+    "VR Headset": 414,
+    "3D Glasses": 599,
+    "Specs": 803,
+    "Gold Shades": 191,
+    "Eye Patch": 504
+  },
+  "Headwear": {
+    "None": 4473,
+    "Flower": 571,
+    "Bow": 585,
+    "Top Hat": 773,
+    "Headphones": 647,
+    "Beanie": 859,
+    "Wizard Hat": 338,
+    "Headband": 715,
+    "Halo": 365,
+    "Party Hat": 544,
+    "Crown": 130
+  },
+  "Outfit": {
+    "None": 3045,
+    "Collar & Bell": 1813,
+    "Pearl Necklace": 421,
+    "Suit": 826,
+    "Hoodie": 999,
+    "Bow Tie": 1021,
+    "Scarf": 815,
+    "Gold Chain": 1060
+  },
+  "Earring": {
+    "None": 9150,
+    "Gold Hoop": 338,
+    "Pearl Earring": 421,
+    "Diamond Stud": 91
+  },
+  "Accessories": {
+    "0": 715,
+    "1": 3190,
+    "2": 4251,
+    "3": 1744,
+    "4": 100
+  }
+}
