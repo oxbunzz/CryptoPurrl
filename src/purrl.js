@@ -1,12 +1,16 @@
-// CryptoPurrls — 20 hand-designed pixel characters grown from the Purrl logo.
+// CryptoPurrls — 20 pixel PFPs grown from the Purrl logo.
 //
-// Every Purrl is a small creature whose head is the logo (tall left peak,
-// short right peak, notched chin) drawn at 12×12, standing on the bottom edge
-// of a 32×32 canvas and turned to the right. Each of the 20 is its own design
-// with its own theme, body colour, background, eyes, headwear, outfit and
-// held item, and no value of any trait appears twice in the collection.
+// Each Purrl is a bust portrait on a 32×32 canvas, turned three-quarters to
+// the right. The head is the logo at 1:1 (a 14×14 block with a tall left peak,
+// a short right peak and a notched chin) with a lighter face and muzzle on the
+// front, big eyes looking right, and shoulders cropped by the bottom edge.
+// Thick ink outline, flat colours with one light and one shade, solid
+// background.
 //
-// Plain ES module with no dependencies: it renders in Node and in the browser.
+// There are 20 Purrls: Genesis plus 19 dealt from six trait lists. Each list
+// is shuffled once with SEED and dealt out, so no trait value is ever worn
+// twice. Plain ES module with no dependencies: it renders in Node and in the
+// browser.
 
 export const SIZE = 32;
 export const SUPPLY = 20;
@@ -15,52 +19,50 @@ export const SEED = 0x50555252; // "PURR"
 export const INK = '#0b0b0d';   // logo background
 export const CREAM = '#f3efe7'; // logo foreground
 const WHITE = '#ffffff';
-const FACE = '#1a1420';
-const FACE_LIGHT = '#f6f0ff';
+const K = '#141018'; // line colour for features
 
 // ---------------------------------------------------------------------------
 // Silhouette
 
-const HEAD = [
-  '###.........',
-  '###......###',
-  '###......###',
-  ...Array(8).fill('############'),
-  '.##########.',
+const LOGO = [
+  '####..........',
+  '####......####',
+  '####......####',
+  ...Array(10).fill('##############'),
+  '.############.',
 ];
-const HEAD_X = 10, HEAD_Y = 13;
-const SNOUT = [22, 20]; // a one-pixel nose: the head faces right
+const HEAD_X = 11, HEAD_Y = 4;
+const MUZZLE = new Set([[25, 12], [25, 13], [25, 14]].map(([x, y]) => y * SIZE + x));
 
-const BODY = [
-  '............########............',
-  '...........##########...........',
-  '...........##########...........',
-  '...........##########...........',
-  '............########............',
-  '............###..###............',
-  '............###..####...........',
-];
-const BODY_Y = 25;
+// Shoulders, cropped by the bottom edge.
+const BODY_ROWS = { 18: [14, 21], 19: [13, 22], 20: [10, 25], 21: [8, 27] };
+for (let y = 22; y < SIZE; y++) BODY_ROWS[y] = [6, 29];
 
-const inHead = (x, y) => HEAD[y - HEAD_Y]?.[x - HEAD_X] === '#' || (x === SNOUT[0] && y === SNOUT[1]);
-const inBody = (x, y) => BODY[y - BODY_Y]?.[x] === '#';
-const inCat = (x, y) => inHead(x, y) || inBody(x, y);
-const inOutline = (x, y) => !inCat(x, y) && (inCat(x - 1, y) || inCat(x + 1, y) || inCat(x, y - 1) || inCat(x, y + 1));
+const inHead = (x, y) => LOGO[y - HEAD_Y]?.[x - HEAD_X] === '#' || MUZZLE.has(y * SIZE + x);
+const inBody = (x, y) => BODY_ROWS[y] && x >= BODY_ROWS[y][0] && x <= BODY_ROWS[y][1];
+const inFig = (x, y) => inHead(x, y) || inBody(x, y);
+const inOutline = (x, y) => !inFig(x, y) && (inFig(x - 1, y) || inFig(x + 1, y) || inFig(x, y - 1) || inFig(x, y + 1));
 
 const cells = (test) => {
   const out = [];
   for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) if (test(x, y)) out.push([x, y]);
   return out;
 };
-const CAT_CELLS = cells(inCat);
+const HEAD_CELLS = cells(inHead);
+const BODY_CELLS = cells((x, y) => inBody(x, y) && !inHead(x, y));
 const OUTLINE_CELLS = cells(inOutline);
 
-// Light comes from the front (the right): shine near the top right of the head,
-// shade along the back edge, the chin and the bottom of each part.
-const SHINE = new Set([[19, 16], [20, 16], [20, 17]].map(([x, y]) => y * SIZE + x));
-const toneAt = (x, y) => {
-  if (SHINE.has(y * SIZE + x)) return 0;
-  if (!inCat(x - 1, y) || !inCat(x, y + 1) || (inHead(x, y) && y === HEAD_Y + 11)) return 2;
+// The lighter face: the front of the head plus the muzzle.
+const FACE_ROWS = { 9: [17, 23], 10: [16, 24], 11: [16, 24], 12: [16, 25], 13: [16, 25], 14: [16, 25], 15: [16, 24], 16: [16, 24], 17: [17, 23] };
+const inFace = (x, y) => FACE_ROWS[y] && x >= FACE_ROWS[y][0] && x <= FACE_ROWS[y][1];
+
+// Light from the front: shine at the top front of the head, shade on the back.
+const LIGHT = new Set([[22, 7], [23, 7], [23, 8]].map(([x, y]) => y * SIZE + x));
+const rowStart = (x, y, test) => { while (test(x - 1, y)) x--; return x; };
+const tone = (x, y, test) => {
+  if (LIGHT.has(y * SIZE + x)) return 0;
+  if (x - rowStart(x, y, test) < 2) return 2;
+  if (test === inHead && y === HEAD_Y + 13) return 2;
   return 1;
 };
 
@@ -78,12 +80,12 @@ export function mix(a, b, t) {
   }
   return MIXES.get(key);
 }
-// Three tones from one colour: a warm light, the colour, a cool shade.
-export const ramp = (c) => [mix(c, '#fffbe8', 0.35), c, mix(mix(c, '#2a2350', 0.22), INK, 0.12)];
+export const ramp = (c) => [mix(c, '#fffbe8', 0.3), c, mix(mix(c, '#2a2350', 0.25), INK, 0.12)];
 const luminance = (c) => { const [r, g, b] = hexToRgb(c); return (0.299 * r + 0.587 * g + 0.114 * b) / 255; };
+const distance = (a, b) => Math.hypot(...hexToRgb(a).map((v, i) => v - hexToRgb(b)[i]));
 
 // ---------------------------------------------------------------------------
-// Canvas and drawing helpers
+// Canvas
 
 class Grid {
   constructor() { this.px = new Array(SIZE * SIZE).fill(null); }
@@ -102,281 +104,140 @@ class Grid {
       const px = p % SIZE, py = Math.floor(p / SIZE);
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = px + dx, ny = py + dy;
-        if (nx >= 0 && nx < SIZE && !filled.has(ny * SIZE + nx) && !inCat(nx, ny)) this.set(nx, ny, INK);
+        if (nx >= 0 && nx < SIZE && !filled.has(ny * SIZE + nx) && !inFig(nx, ny)) this.set(nx, ny, INK);
       }
     }
     this.sprite(x, y, rows, map);
   }
-  // Paint the body's cells in rows [y0, y1] with a shaded colour (clothes).
-  cloth(c, y0, y1, keep = () => true) {
+  // Fill clothing over the shoulders (rows from y0 down) with shading.
+  cloth(c, y0 = 20, keep = () => true) {
     const r = ramp(c);
-    for (const [x, y] of CAT_CELLS) if (!inHead(x, y) && y >= y0 && y <= y1 && keep(x, y)) this.set(x, y, r[toneAt(x, y)]);
+    for (const [x, y] of BODY_CELLS) if (y >= y0 && keep(x, y)) this.set(x, y, r[tone(x, y, inBody)]);
   }
 }
 
-// --- Faces ----------------------------------------------------------------------
-// The back eye sits at x 14, the front eye at x 18; both look right.
-
-const EYES = {
-  plain: (g, k) => { g.sprite(14, 18, ['wk', 'wk'], { w: WHITE, k }); g.sprite(18, 18, ['wk', 'wk'], { w: WHITE, k }); },
-  starry: (g, k) => { g.sprite(14, 18, ['wk', 'kk'], { w: WHITE, k }); g.sprite(18, 18, ['wk', 'kk'], { w: WHITE, k }); g.set(21, 17, '#ffd23f'); },
-  fierce: (g, k) => { EYES.plain(g, k); g.set(14, 17, k); g.rect(18, 17, 2, 1, k); },
-  lidded: (g, k) => { g.sprite(14, 18, ['kk', 'wk'], { k, w: WHITE }); g.sprite(18, 18, ['kk', 'wk'], { k, w: WHITE }); },
-  closed: (g, k) => { g.rect(14, 19, 2, 1, k); g.rect(18, 19, 2, 1, k); },
-  happy: (g, k) => { g.sprite(14, 18, ['.k', 'k.'], { k }); g.sprite(18, 18, ['.k', 'k.'], { k }); g.set(16, 19, k); g.set(20, 19, k); },
-  proud: (g, k) => { g.rect(14, 19, 2, 1, k); g.rect(18, 19, 2, 1, k); g.set(15, 18, k); g.set(19, 18, k); },
-  wide: (g, k) => { g.sprite(14, 17, ['ww', 'wk', 'wk'], { w: WHITE, k }); g.sprite(18, 17, ['ww', 'wk', 'wk'], { w: WHITE, k }); },
-  wink: (g, k) => { g.sprite(14, 18, ['wk', 'wk'], { w: WHITE, k }); g.sprite(18, 18, ['k.', '.k'], { k }); },
-  focused: (g, k) => { g.rect(14, 18, 2, 1, k); g.sprite(18, 18, ['wk', 'kk'], { w: WHITE, k }); },
-  dot: (g, k) => { g.set(15, 19, k); g.set(19, 19, k); },
-};
-const MOUTHS = {
-  smile: (g, k) => g.sprite(18, 21, ['k..', '.kk'], { k }),
-  grin: (g, k) => g.sprite(18, 21, ['kkk', '.ww'], { k, w: WHITE }),
-  flat: (g, k) => g.rect(19, 22, 2, 1, k),
-  open: (g, k) => g.sprite(19, 21, ['kk', 'kr'], { k, r: '#c2304a' }),
-  smirk: (g, k) => g.sprite(18, 21, ['..k', 'kk.'], { k }),
-  o: (g, k) => g.sprite(20, 21, ['k', 'k'], { k }),
-  tongue: (g, k) => g.sprite(19, 21, ['kk', '.p'], { k, p: '#ff6f91' }),
-};
-
 // ---------------------------------------------------------------------------
-// The 20 characters. Each lists its traits and draws its own costume.
+// Traits. The back eye is 2×3 at (17, 10), the front eye 3×3 at (21, 10).
 
-const C = {
-  red: '#d6334a', deepRed: '#a31f35', gold: '#f5c242', goldDark: '#c9902a', white: '#f7f7fb', silver: '#c9d1dd',
-  steel: '#8e9aae', black: '#25232c', brown: '#7a4a2c', tan: '#c9a26b', blue: '#3d6fff', navy: '#22305e',
-  green: '#3fa45a', pink: '#ff7ab8', purple: '#5b3fb0', cyan: '#3fd1ff', yellow: '#ffd23f', orange: '#ff8a1f',
+const BACKGROUNDS = [
+  ['Slate', '#7f9cb0'], ['Seafoam', '#8fd3c3'], ['Rose', '#f2a7b8'], ['Sun', '#f6d36b'], ['Cornflower', '#9fb7ff'],
+  ['Lilac', '#c7a6ff'], ['Salmon', '#ff9f80'], ['Lime', '#b5e07a'], ['Sky', '#7fd6ff'], ['Bone', '#e7e3d9'],
+  ['Apricot', '#ffcf9f'], ['Orchid', '#d4a5e0'], ['Fern', '#9ad0a0'], ['Coral', '#f28b8b'], ['Steel', '#a0a8b8'],
+  ['Blossom', '#ffd6e8'], ['Teal', '#6fb0b8'], ['Wheat', '#e6c48c'], ['Powder', '#b0c4de'],
+];
+
+const FURS = [
+  ['Brown', '#8a5a3c'], ['Cocoa', '#5a3a28'], ['Black', '#2e2a30'], ['Gray', '#8f909c'], ['White', '#efece6'],
+  ['Golden', '#d9a441'], ['Orange', '#e8823a'], ['Red', '#c94a3a'], ['Pink', '#f29bb8'], ['Purple', '#8a6ad6'],
+  ['Blue', '#5a8ae0'], ['Teal', '#3fb8a8'], ['Green', '#6fc05a'], ['Yellow', '#f2d24a'], ['Zombie', '#9fc28a'],
+  ['Ice', '#a8dcf0'], ['Maroon', '#7a2a2a'], ['Silver', '#b8c4d4'], ['Gold', '#e8b830'], ['Cyan', '#3fd8e8'],
+];
+const faceOf = (fur) => mix(fur, '#fde8d2', 0.55);
+
+const eyesWith = (pupil, opts = {}) => (g, f) => {
+  const lid = opts.lid ? ramp(f)[2] : null;
+  g.sprite(17, 10, ['ww', 'wp', 'wp'], { w: WHITE, p: pupil });
+  g.sprite(21, 10, ['www', 'wpp', 'wpp'], { w: WHITE, p: pupil });
+  if (lid) { g.rect(17, 10, 2, 1, lid); g.rect(21, 10, 3, 1, lid); }
+  g.rect(17, 9, 2, 1, K); g.rect(21, 9, 3, 1, K);
 };
+const frame = (map, rows) => (g, f) => { eyesWith(K)(g, f); g.sprite(15, 9, rows, map); };
 
-const CHARACTERS = [
-  {
-    Character: 'Genesis', Body: ['Cream', CREAM], Background: ['Ink', INK], Eyes: 'Plain', Headwear: 'None', Outfit: 'None', Item: 'None',
-    face: ['plain', 'flat'],
-  },
-  {
-    Character: 'Astronaut', Body: ['Sky', '#7cc8ff'], Background: ['Periwinkle', '#dfe3ff'], Eyes: 'Starry', Headwear: 'Antenna Helmet', Outfit: 'Space Suit', Item: 'Flag',
-    face: ['starry', 'smile'],
-    draw(g) {
-      g.cloth(C.white, 25, 31);
-      g.sprite(13, 26, ['rb', '..', 'gg'], { r: C.red, b: C.blue, g: C.silver });
-      g.rect(12, 25, 8, 1, C.silver);
-      g.shape(20, 9, ['r', 'k', 'k', 'k'], { r: C.red, k: C.steel });
-      g.rect(10, 16, 12, 1, mix(C.cyan, WHITE, 0.4));
-      g.shape(22, 21, ['rrw', 'rww', 'k..', 'k..', 'k..', 'k..', 'k..'], { r: C.red, w: WHITE, k: C.steel });
-    },
-  },
-  {
-    Character: 'Samurai', Body: ['Tangerine', '#ff9a3d'], Background: ['Sand', '#f3e9d6'], Eyes: 'Fierce', Headwear: 'Hachimaki', Outfit: 'Red Armor', Item: 'Katana',
-    face: ['fierce', 'flat'],
-    draw(g) {
-      g.cloth(C.deepRed, 25, 29);
-      for (const y of [26, 28]) g.rect(11, y, 10, 1, C.gold);
-      g.cloth(C.black, 30, 31);
-      g.rect(10, 16, 12, 1, C.white);
-      g.set(17, 16, C.red);
-      g.shape(7, 16, ['ww.', '.ww'], { w: C.white });
-      g.shape(22, 14, ['.....s', '....s.', '...s..', '..s...', '.k....', 'k.....'], { s: C.silver, k: C.black });
-    },
-  },
-  {
-    Character: 'Wizard', notch: '#5b3fb0', Body: ['Lilac', '#b9a4ff'], Background: ['Mint', '#d2f5ea'], Eyes: 'Wise', Headwear: 'Star Hat', Outfit: 'Robe', Item: 'Orb Staff',
-    face: ['lidded', 'smile'],
-    draw(g) {
-      g.cloth(C.purple, 25, 31);
-      for (const [x, y] of [[13, 27], [17, 29], [15, 26]]) g.set(x, y, C.gold);
-      g.shape(11, 5, ['.......p..', '......pp..', '.....ppp..', '....pyp...', '....ppp...', '...pppp...', '...pppp...', '..pppppp..', 'PPPPPPPPPP'], { p: C.purple, P: '#3a2585', y: C.gold });
-      g.shape(23, 12, ['.cc', 'cWc', '.cc', '.b.', '.b.', '.b.', '.b.', '.b.', '.b.', '.b.', '.b.', '.b.', '.b.', '.b.', '.b.', '.b.', '.b.', '.b.', '.b.'], { c: C.cyan, W: WHITE, b: C.brown });
-    },
-  },
-  {
-    Character: 'DJ', Body: ['Teal', '#2fb8a0'], Background: ['Bubblegum', '#ffdcee'], Eyes: 'Vibing', Headwear: 'Headphones', Outfit: 'Hoodie & Chain', Item: 'Vinyl',
-    face: ['closed', 'grin'],
-    draw(g) {
-      g.cloth(C.black, 25, 29);
-      g.sprite(13, 25, ['y....y', '.y..y.', '..yy..'], { y: C.gold });
-      g.cloth(C.navy, 30, 31);
-      g.sprite(9, 11, ['..kkkkkkkkkk..', '.k..........k.', 'k............k'], { k: INK });
-      g.shape(8, 16, ['pp', 'pp', 'pp'], { p: C.pink });
-      g.shape(22, 16, ['pp', 'pp', 'pp'], { p: C.pink });
-      g.shape(23, 24, ['.kkk.', 'kkkkk', 'kkrkk', 'kkkkk', '.kkk.'], { k: '#3a3842', r: C.red });
-    },
-  },
-  {
-    Character: 'Chef', notch: '#ffffff', Body: ['Peach', '#ffc49b'], Background: ['Butter', '#fdf0d0'], Eyes: 'Proud', Headwear: 'Toque', Outfit: 'Chef Coat', Item: 'Spoon',
-    face: ['proud', null],
-    draw(g) {
-      g.cloth(C.white, 25, 29);
-      g.sprite(14, 26, ['k.k', '...', 'k.k'], { k: C.steel });
-      g.rect(12, 25, 8, 1, C.red);
-      g.cloth('#4a4a55', 30, 31);
-      g.sprite(17, 21, ['kk.kk', 'k...k'], { k: '#5a3418' });
-      g.shape(11, 5, ['..wwww..', '.wwwwww.', 'wwwwwwww', 'wwwwwwww', '.wwwwww.', '.wwwwww.', '.gggggg.'], { w: WHITE, g: '#d6dae3' });
-      g.shape(23, 19, ['bb', 'bb', '.b', '.b', '.b', '.b', '.b'], { b: C.tan });
-    },
-  },
-  {
-    Character: 'Pirate', notch: '#2b2733', Body: ['Mint', '#87e9cd'], Background: ['Sky', '#d6eeff'], Eyes: 'Eye Patch', Headwear: 'Tricorn', Outfit: 'Striped Shirt', Item: 'Cutlass',
-    face: ['dot', 'smirk'],
-    draw(g) {
-      g.cloth(C.white, 25, 29);
-      for (const y of [26, 28]) g.rect(11, y, 10, 1, C.red);
-      g.rect(12, 29, 8, 1, C.brown);
-      g.cloth(C.navy, 30, 31);
-      g.rect(18, 18, 3, 2, INK);
-      g.rect(10, 17, 8, 1, INK);
-      g.shape(9, 10, ['.kk.......kk.', 'kkkkkkkkkkkkk', '.kkkkkwkkkkk.', '..kkkkkkkkk..'], { k: '#2b2733', w: WHITE });
-      g.shape(23, 19, ['...s', '..s.', '.s..', 'gs..', '.g..'], { s: C.silver, g: C.gold });
-    },
-  },
-  {
-    Character: 'Knight', Body: ['Rose', '#e8577f'], Background: ['Lime', '#e4f7c8'], Eyes: 'Brave', Headwear: 'Plume', Outfit: 'Plate Armor', Item: 'Shield',
-    face: ['focused', 'flat'],
-    draw(g) {
-      g.cloth(C.steel, 25, 31);
-      g.rect(11, 27, 10, 1, '#6c778a');
-      g.shape(14, 8, ['..rr', '.rr.', 'rrr.', 'rr..', '.s..', '.s..', '.s..'], { r: C.red, s: C.steel });
-      g.shape(6, 23, ['bbbb', 'bybb', 'yyyy', 'bybb', 'bybb', '.bb.'], { b: C.blue, y: C.gold });
-      g.shape(23, 19, ['.s', '.s', '.s', '.s', 'gg', '.b'], { s: C.silver, g: C.gold, b: C.brown });
-    },
-  },
-  {
-    Character: 'Detective', notch: '#5a3e2b', Body: ['Mocha', '#9a6b4f'], Background: ['Aqua', '#d2f6f6'], Eyes: 'Curious', Headwear: 'Fedora', Outfit: 'Trench Coat', Item: 'Magnifier',
-    face: ['wide', 'o'],
-    draw(g) {
-      g.cloth(C.tan, 25, 31);
-      g.rect(11, 28, 10, 1, '#8a6a3a');
-      g.sprite(14, 25, ['k..k', '.kk.'], { k: '#8a6a3a' });
-      g.shape(9, 11, ['...bbbbbbb...', '...brrrrrb...', 'bbbbbbbbbbbbb'], { b: '#5a3e2b', r: '#2b1d14' });
-      g.shape(23, 17, ['.ggg.', 'gcccg', 'gcwcg', 'gcccg', '.ggg.', '...b.', '....b'], { g: C.goldDark, c: '#bdeeff', w: WHITE, b: C.brown });
-    },
-  },
-  {
-    Character: 'Painter', notch: '#d6334a', Body: ['Blush', '#ffb3c8'], Background: ['Cloud', '#f1f0f5'], Eyes: 'Dreamy', Headwear: 'Beret', Outfit: 'Paint Smock', Item: 'Brush',
-    face: ['happy', 'smile'],
-    draw(g) {
-      g.cloth('#8ea6c8', 25, 29);
-      for (const [x, y, c] of [[13, 26, C.red], [16, 27, C.yellow], [18, 26, C.blue], [14, 28, C.green]]) g.set(x, y, c);
-      g.cloth('#3a3a4a', 30, 31);
-      g.shape(11, 11, ['.....k..', '.rrrrrr.', 'rrrrrrrr', '.rrrrrr.'], { r: C.red, k: INK });
-      g.shape(23, 18, ['...r', '..b.', '.b..', 'b...'], { r: C.red, b: C.tan });
-    },
-  },
-  {
-    Character: 'Skater', notch: '#3d6fff', Body: ['Lime', '#b6e35a'], Background: ['Coral', '#ffdcdb'], Eyes: 'Chill', Headwear: 'Backwards Cap', Outfit: 'Graphic Tee', Item: 'Skateboard',
-    face: ['lidded', 'grin'],
-    draw(g) {
-      g.cloth(C.orange, 25, 29);
-      g.sprite(14, 26, ['ww', 'w.'], { w: WHITE });
-      g.cloth('#3a5aa8', 30, 31);
-      g.shape(8, 12, ['..bbbbbbbb..', 'bbbbbbbbbbbb'], { b: C.blue });
-      g.shape(24, 20, ['w.', 'pk', 'pk', 'pk', 'pk', 'pk', 'pk', 'pk', 'w.'], { p: C.pink, k: '#2c2a33', w: WHITE });
-    },
-  },
-  {
-    Character: 'Gardener', notch: '#ecc764', Body: ['Coral', '#ff7a6b'], Background: ['Sage', '#e2ecd8'], Eyes: 'Gentle', Headwear: 'Straw Hat', Outfit: 'Overalls', Item: 'Watering Can',
-    face: ['plain', 'smile'],
-    draw(g) {
-      g.cloth('#f4f4f8', 25, 26);
-      g.cloth('#4a6fb0', 27, 31);
-      g.sprite(13, 25, ['b....b', 'b....b'], { b: '#4a6fb0' });
-      g.shape(7, 11, ['....yyrryy....', 'yyyyyyyyyyyyyyy'], { y: '#ecc764', r: C.red });
-      g.shape(23, 24, ['gg..g', 'gggg.', 'ggg..', 'ggg..'], { g: C.green });
-      g.set(28, 22, C.cyan); g.set(29, 24, C.cyan);
-    },
-  },
-  {
-    Character: 'Rockstar', notch: '#ff3d8b', Body: ['Charcoal', '#4a4a55'], Background: ['Peach', '#ffeadb'], Eyes: 'Wild', Headwear: 'Mohawk', Outfit: 'Leather Jacket', Item: 'Guitar',
-    face: ['wink', 'tongue'],
-    draw(g) {
-      g.cloth('#1d1b22', 25, 29);
-      g.rect(16, 25, 1, 5, C.silver);
-      g.set(12, 26, C.silver); g.set(19, 26, C.silver);
-      g.cloth('#2f3a5e', 30, 31);
-      g.shape(13, 9, ['.p.p.p', 'pppppp', 'pppppp', 'pppppp'], { p: '#ff3d8b' });
-      g.shape(20, 21, ['......kk', '.....k..', 'rrr.k...', 'rwrk....', 'rrrr....', '.rr.....'], { r: C.red, w: WHITE, k: C.black });
-    },
-  },
-  {
-    Character: 'Scientist', Body: ['Mustard', '#f2c14e'], Background: ['Purrl Blue', '#dbe5ec'], Eyes: 'Goggles', Headwear: 'Lab Goggles', Outfit: 'Lab Coat', Item: 'Flask',
-    face: ['plain', 'open'],
-    draw(g) {
-      g.cloth(C.white, 25, 31);
-      g.sprite(14, 25, ['k..k', '.kk.'], { k: '#b8bfcc' });
-      g.sprite(12, 27, ['bc'], { b: C.blue, c: C.red });
-      g.sprite(13, 17, ['kkkkkkkkk', 'kccckccck', 'kccckccck', 'kkkkkkkkk'], { k: '#3a3a4a', c: mix(C.cyan, WHITE, 0.45) });
-      g.set(15, 18, INK); g.set(19, 18, INK);
-      g.shape(23, 22, ['.w.', '.w.', 'wgw', 'ggg', 'ggg'], { w: '#e6f4ff', g: '#58e07a' });
-      g.set(24, 20, '#9af0b0'); g.set(25, 19, '#9af0b0');
-    },
-  },
-  {
-    Character: 'Ninja', notch: '#2b2b36', Body: ['Cobalt', '#3d6fff'], Background: ['Pearl', '#f6eefb'], Eyes: 'Narrow', Headwear: 'Ninja Hood', Outfit: 'Gi', Item: 'Shuriken',
-    face: ['dot', null],
-    draw(g) {
-      const hood = ramp('#2b2b36');
-      for (const [x, y] of CAT_CELLS) if (inHead(x, y) && !(y >= 18 && y <= 20 && x >= 13)) g.set(x, y, hood[toneAt(x, y)]);
-      g.cloth('#2b2b36', 25, 31);
-      g.rect(11, 28, 10, 1, C.red);
-      g.shape(7, 16, ['rr.', '.rr'], { r: C.red });
-      g.shape(25, 17, ['.s.', 'sks', '.s.'], { s: C.silver, k: INK });
-    },
-  },
-  {
-    Character: 'King', notch: '#ffd35a', Body: ['Gold', '#f0b72f'], Background: ['Mauve', '#efdce9'], Eyes: 'Regal', Headwear: 'Crown', Outfit: 'Royal Cape', Item: 'Scepter',
-    face: ['proud', 'smirk'],
-    draw(g) {
-      g.cloth(C.deepRed, 25, 31);
-      g.sprite(11, 25, ['wkwwkwwkww'], { w: WHITE, k: INK });
-      g.shape(13, 10, ['y.y.y.', 'yyyyyy', 'yrybyy', 'yyyyyy'], { y: '#ffd35a', r: C.red, b: C.blue });
-      g.shape(23, 17, ['.b.', 'bWb', '.b.', '.g.', '.g.', '.g.', '.g.', '.g.', '.g.'], { b: C.blue, W: WHITE, g: C.gold });
-    },
-  },
-  {
-    Character: 'Diver', Body: ['Grape', '#7a4fd6'], Background: ['Lavender', '#ebdfff'], Eyes: 'Snorkel Mask', Headwear: 'Snorkel', Outfit: 'Swim Ring', Item: 'Rubber Duck',
-    face: ['plain', 'o'],
-    draw(g) {
-      g.sprite(13, 17, ['kkkkkkkkk', 'kccckccck', 'kccckccck', 'kkkkkkkkk'], { k: C.orange, c: mix(C.cyan, WHITE, 0.4) });
-      g.set(15, 18, INK); g.set(19, 18, INK);
-      g.shape(12, 9, ['yyy', '..y', '..y', '..y', '..y', '..y', '..y'], { y: C.yellow });
-      g.shape(9, 27, ['.rwrwrwrwrwrw.', 'rwrwrwrwrwrwrw', '.rwrwrwrwrwrw.'], { r: C.red, w: WHITE });
-      g.shape(24, 27, ['.yy.', '.yko', 'yyy.', 'yyyy'], { y: C.yellow, o: C.orange, k: INK });
-    },
-  },
-  {
-    Character: 'Firefighter', notch: '#d6334a', Body: ['Ash', '#b8bcc6'], Background: ['Gold', '#f7e3a3'], Eyes: 'Alert', Headwear: 'Fire Helmet', Outfit: 'Turnout Coat', Item: 'Axe',
-    face: ['wide', 'flat'],
-    draw(g) {
-      g.cloth('#3a3a44', 25, 31);
-      for (const y of [27, 29]) g.rect(11, y, 10, 1, '#e8ff3d');
-      g.shape(9, 11, ['...rrrrrr....', '..rrryyrrr...', 'rrrrrrrrrrrrr'], { r: C.red, y: C.gold });
-      g.shape(23, 19, ['ss.', 'sbb', 's.b', '..b', '..b', '..b'], { s: C.silver, b: C.red });
-    },
-  },
-  {
-    Character: 'Cowboy', notch: '#9a6b3f', Body: ['Snow', '#fbfbff'], Background: ['Tangerine', '#ffe2c7'], Eyes: 'Squint', Headwear: 'Ten-Gallon Hat', Outfit: 'Sheriff Vest', Item: 'Lasso',
-    face: ['focused', 'smirk'],
-    draw(g) {
-      g.cloth('#d6e2ef', 25, 29);
-      g.cloth('#8a5a32', 25, 29, (x) => x < 14 || x > 17);
-      g.set(15, 27, C.gold); g.set(16, 26, C.gold); g.set(16, 28, C.gold);
-      g.cloth('#3a5aa8', 30, 31);
-      g.shape(7, 9, ['.....bbbbbb....', '.....bbbbbb....', '.....rrrrrr....', 'b..bbbbbbbbbb.b', '.bbbbbbbbbbbbb.'], { b: '#9a6b3f', r: '#5a3a20' });
-      g.shape(23, 22, ['.rrr.', 'r...r', 'r...r', '.rrr.', '..r..', '...r.'], { r: '#c9a26b' });
-    },
-  },
-  {
-    Character: 'Dreamer', notch: '#4a6fd6', Body: ['Midnight', '#2c2645'], Background: ['Lemon', '#fff5c2'], Eyes: 'Sleepy', Headwear: 'Nightcap', Outfit: 'Star Pajamas', Item: 'Teddy',
-    face: ['closed', 'o'],
-    draw(g) {
-      g.cloth('#9ec5ff', 25, 31);
-      for (const [x, y] of [[13, 26], [18, 28], [15, 30]]) g.set(x, y, C.yellow);
-      g.shape(10, 9, ['..........ww', '........bbww', '......bbbb..', '...bbbbbbb..', 'bbbbbbbbbbb.', 'wwwwwwwwwwww'], { b: '#4a6fd6', w: WHITE });
-      g.shape(23, 24, ['b..b', 'bbbb', 'bbkb', 'bbbb', '.bb.', 'b..b'], { b: '#b07a4a', k: INK });
-      g.sprite(25, 10, ['zzz', '.z.', 'zzz'], { z: '#7a6fb0' });
-      g.sprite(28, 6, ['zz', 'zz'], { z: '#a59ad6' });
-    },
-  },
+const EYES = [
+  ['Classic', eyesWith(K)],
+  ['Blue', eyesWith('#2d5bd6')],
+  ['Green', eyesWith('#2f9a4a')],
+  ['Red', eyesWith('#d6253a')],
+  ['Sleepy', eyesWith(K, { lid: true })],
+  ['Angry', (g, f) => { eyesWith(K)(g, f); g.rect(17, 9, 2, 1, faceOf(f)); g.rect(21, 9, 3, 1, faceOf(f)); g.sprite(16, 8, ['kk.....', '..k..kk', '.....k.'].map((r) => r), { k: K }); g.set(18, 10, K); g.set(21, 10, K); }],
+  ['Wide', (g) => { g.sprite(17, 10, ['ww', 'ww', 'wk'], { w: WHITE, k: K }); g.sprite(21, 10, ['www', 'www', 'wwk'], { w: WHITE, k: K }); }],
+  ['Shades', (g) => g.sprite(15, 10, ['kkkkkkkkkkk', '..kkk.kkkkk', '..kgk.kkgkk', '...k...kkk.'].map((r) => r), { k: K, g: '#4a5468' })],
+  ['Aviators', (g) => g.sprite(15, 9, ['yyyyyyyyyyy', '..ybby.ybbby', '..ybby.ybbby', '...yy...yyy.'], { y: '#d9a441', b: '#5a3a28' })],
+  ['3D Glasses', (g) => g.sprite(15, 9, ['wwwwwwwwwww', '..wrrw.wbbbw', '..wrrw.wbbbw', '..wwww.wwwww'], { w: WHITE, r: '#e8413c', b: '#38b6e8' })],
+  ['Nerd Glasses', frame({ k: K }, ['..kkkk.kkkkk', 'kkk..kkk...k', '..k..k.k...k', '..kkkk.kkkkk'])],
+  ['Heart Glasses', (g) => g.sprite(15, 9, ['..hh.h.hh.hh', 'kkhhhhkhhhhh', '...hhh..hhh.', '....h....h..'], { h: '#ff3d8b', k: K })],
+  ['Visor', (g) => g.sprite(14, 10, ['kkkkkkkkkkkkk', 'kcccccccccccc', 'kkkkkkkkkkkkk'], { k: K, c: '#3ff2ff' })],
+  ['Eye Patch', (g, f) => { eyesWith(K)(g, f); g.rect(11, 9, 14, 1, K); g.sprite(21, 9, ['kkk', 'kkk', 'kkk', '.k.'], { k: K }); }],
+  ['Monocle', (g, f) => { eyesWith(K)(g, f); g.sprite(20, 9, ['yyyyy', 'y...y', 'y...y', 'y...y', 'yyyyy', '....y', '....y'], { y: '#f5c242' }); }],
+  ['Laser', (g) => {
+    g.sprite(17, 10, ['rr', 'rw', 'rr'], { r: '#ff2a3d', w: '#fff0f0' });
+    g.sprite(21, 10, ['rrr', 'rww', 'rrr'], { r: '#ff2a3d', w: '#fff0f0' });
+    for (let x = 24; x < SIZE; x++) { g.set(x, 11, '#ff2a3d'); g.set(x, 10, '#ff8a95'); g.set(x, 12, '#ff8a95'); }
+  }],
+  ['Stars', (g) => { g.sprite(16, 10, ['.y.', 'yyy', '.y.'], { y: '#f5b400' }); g.sprite(21, 10, ['.y.', 'yWy', '.y.'], { y: '#f5b400', W: '#fff3b0' }); }],
+  ['Happy', (g) => { g.sprite(17, 10, ['.k', 'k.'].map((r, i) => (i ? 'kk' : '..')), { k: K }); g.sprite(21, 10, ['.k.', 'k.k'], { k: K }); g.sprite(17, 10, ['.k', 'k.'], { k: K }); }],
+  ['Tired', (g, f) => { eyesWith(K)(g, f); g.rect(17, 13, 2, 1, '#8a6ad6'); g.rect(21, 13, 3, 1, '#8a6ad6'); }],
+  ['Ski Goggles', (g) => g.sprite(13, 9, ['wwwwwwwwwwwww', 'wooooooooooow', 'woooooooooooo', 'wwwwwwwwwwwww'], { w: WHITE, o: '#ff8a1f' })],
+];
+
+const MOUTHS = [
+  ['Line', (g) => g.rect(20, 15, 5, 1, K)],
+  ['Smile', (g) => { g.rect(19, 15, 5, 1, K); g.set(24, 14, K); }],
+  ['Grin', (g) => g.sprite(19, 14, ['kkkkkk', 'wwwwww', 'kkkkkk'].map((r, i) => (i === 1 ? 'kwwwww' : r)), { k: K, w: WHITE })],
+  ['Open', (g) => g.sprite(20, 14, ['kkkk', 'krrk', 'kkkk'], { k: K, r: '#8e2b3a' })],
+  ['Tongue', (g) => { g.rect(20, 15, 5, 1, K); g.sprite(22, 16, ['pp', 'p.'], { p: '#ff6f91' }); }],
+  ['Frown', (g) => { g.rect(20, 15, 4, 1, K); g.set(24, 16, K); g.set(19, 16, K); }],
+  ['Smirk', (g) => { g.rect(19, 15, 4, 1, K); g.set(23, 14, K); g.set(24, 14, K); }],
+  ['Cigarette', (g) => { g.rect(20, 15, 4, 1, K); g.shape(24, 15, ['wwwwo'], { w: WHITE, o: '#ff8a1f' }); g.sprite(29, 12, ['g', '.', 'g'], { g: '#c9cdd6' }); }],
+  ['Pipe', (g) => { g.rect(20, 15, 4, 1, K); g.shape(24, 13, ['...bb', '...bb', 'bbbbb'], { b: '#6b3f26' }); }],
+  ['Lollipop', (g) => { g.rect(20, 15, 4, 1, K); g.shape(24, 12, ['..pp', '..pp', '.w..', 'w...'], { p: '#ff5fa2', w: WHITE }); }],
+  ['Bubblegum', (g) => g.shape(21, 12, ['.ppp.', 'pwppp', 'ppppp', '.ppp.'], { p: '#f27ab0', w: WHITE })],
+  ['Gold Grill', (g) => g.sprite(19, 14, ['kkkkkk', 'kyyyyy', 'kkkkkk'], { k: K, y: '#f5c242' })],
+  ['Fangs', (g) => { g.rect(19, 15, 6, 1, K); g.set(20, 16, WHITE); g.set(23, 16, WHITE); }],
+  ['Mustache', (g) => { g.sprite(19, 14, ['mmmmmm', 'm....m'], { m: '#4a2a18' }); g.rect(20, 16, 3, 1, K); }],
+  ['Beard', (g) => { g.rect(20, 15, 4, 1, K); g.sprite(15, 16, ['.....bbbbbb', '....bbbbbbb', '..bbbbbbbbb', '....bbbbbb.'], { b: '#6b3f26' }); }],
+  ['Face Mask', (g) => g.sprite(15, 13, ['.wwwwwwwwwww', 'kwwwwwwwwwww', '.wwwwwwwwww.', '..wwwwwwww..'], { w: '#e8f0f6', k: K })],
+  ['Bandana Mask', (g) => g.sprite(15, 13, ['.rrrrrrrrrrr', 'rrwrrrwrrrwr', '.rrrrrrrrrr.', '...rrrrrrr..'], { r: '#d6334a', w: WHITE })],
+  ['Kiss', (g) => g.sprite(22, 14, ['.rr', 'rrr', '.rr'], { r: '#ff3d6e' })],
+  ['Toothpick', (g) => { g.rect(20, 15, 4, 1, K); g.sprite(24, 14, ['..t', '.t.', 't..'], { t: '#d9b37a' }); }],
+  ['Drool', (g) => { g.rect(19, 15, 5, 1, K); g.set(24, 14, K); g.sprite(21, 16, ['d', 'd'], { d: '#7fd0ff' }); }],
+];
+
+const HEADWEAR = [
+  ['Cap', (g) => g.shape(11, 2, ['..cccccccc', '.cccccccccccc', 'cccccccccccccc', 'cccccccccccccc', 'ccccccccccccwc', 'SSSSSSSSSSSSSSbbbbb'], { c: '#d6334a', S: '#a31f35', b: '#a31f35', w: WHITE })],
+  ['Backwards Cap', (g) => g.shape(6, 2, ['.......bbbbbbbb', '......bbbbbbbbbbbb', '.....bbbbbbbbbbbbbb', '.....bbbbbbbbbbbbbb', '.....bbbbbbbbbbbbbb', 'BBBBBBBBBBBBBBBBBBB'], { b: '#3d6fff', B: '#2a4fc9' })],
+  ['Beanie', (g) => g.shape(11, 1, ['....oooooo', '..oooooooooo', '.oooooooooooo', 'oooooooooooooo', 'oooooooooooooo', 'OoOoOoOoOoOoOo', 'oOoOoOoOoOoOoO'], { o: '#ff8a1f', O: '#c96a10' })],
+  ['Bucket Hat', (g) => g.shape(9, 2, ['....gggggggggg', '...gggggggggggg', '...gggggggggggg', '...GGGGGGGGGGGG', 'gggggggggggggggggg', '.gggggggggggggggg'], { g: '#5fae5a', G: '#3d7a3a' })],
+  ['Fedora', (g) => g.shape(9, 1, ['.....ffffffff', '....ffffffffff', '....ffffffffff', '....kkkkkkkkkk', 'ffffffffffffffffff', '.ffffffffffffffff'], { f: '#7a5a42', k: K })],
+  ['Cowboy Hat', (g) => g.shape(6, 1, ['.......tttttttttt', '.......tttttttttt', '.......TTTTTTTTTT', 't.....tttttttttttt.....t', 'tttttttttttttttttttttttt', '.tttttttttttttttttttttt'], { t: '#c99a5e', T: '#7a5a32' })],
+  ['Crown', (g) => g.shape(13, 1, ['y...yy...y', 'yy..yy..yy', 'yyyyyyyyyy', 'yryyybyyry', 'yyyyyyyyyy', 'YYYYYYYYYY'], { y: '#ffd35a', Y: '#c9902a', r: '#e8344f', b: '#3d8bff' })],
+  ['Headband', (g) => { g.rect(11, 7, 14, 2, '#3d8bff'); g.rect(11, 7, 14, 1, '#6aa8ff'); g.shape(7, 7, ['bbbb', '.b..', 'b...'], { b: '#3d8bff' }); }],
+  ['Bandana', (g) => g.shape(8, 3, ['....rrrrrrrrrr', '...rrrrwrrrrwrr', '...rwrrrrwrrrrr', 'rr.rrrrrrrrrrrr', '.rrrrrrrrrrrrrr', 'r..'], { r: '#d6334a', w: WHITE })],
+  ['Beret', (g) => g.shape(11, 2, ['........k', '...bbbbbbbbb', '.bbbbbbbbbbbbb', 'bbbbbbbbbbbbbbbb', '.BBBBBBBBBBBBB'], { b: '#c0392b', B: '#8a2a1f', k: K })],
+  ['Top Hat', (g) => g.shape(11, 0, ['..kkkkkkkkkk', '..kHkkkkkkkk', '..kHkkkkkkkk', '..kHkkkkkkkk', '..rrrrrrrrrr', '..kkkkkkkkkk', 'kkkkkkkkkkkkkkkk'], { k: '#25232c', H: '#4a4a5e', r: '#d6334a' })],
+  ['Bowler', (g) => g.shape(11, 2, ['....bbbbbb', '...bbbbbbbb', '..bbbbbbbbbb', '..bbbbbbbbbb', 'bbbbbbbbbbbbbb'], { b: '#3a2a20' })],
+  ['Halo', (g) => g.sprite(12, 0, ['..yyyyyyyy..', 'yy........yy', '..yyyyyyyy..'], { y: '#ffe27a' })],
+  ['Headphones', (g) => { g.sprite(10, 1, ['....kkkkkk....', '..kk......kk..', '.k..........k.', 'k............k'], { k: K }); g.shape(9, 8, ['pp', 'pp', 'pp', 'pp'], { p: '#ff6bd6' }); }],
+  ['Sailor Cap', (g) => g.shape(11, 2, ['...wwwwwwww', '..wwwwwwwwww', '.wwwwwwwwwwww', 'bbbbbbbbbbbbbb', 'wwwwwwwwwwwwww'], { w: '#f4f6fb', b: '#2a4fc9' })],
+  ['Mohawk', (g) => g.shape(14, 0, ['.p.p.p.p', 'pppppppp', 'pppppppp', 'pppppppp', 'pppppppp', 'PPPPPPPP'], { p: '#ff3d8b', P: '#c2185b' })],
+  ['Spiky Hair', (g) => g.shape(10, 1, ['..k..k..k..k', '.kk.kkk.kk.kk', 'kkkkkkkkkkkkkkk', 'kkkkkkkkkkkkkkk', 'kkkkkkkkkkkkkkk', 'kkkkkkkkkkkkkkk', '.kkkk.kkkk.kkk.'], { k: '#25232c' })],
+  ['Flower', (g) => g.shape(10, 0, ['.p.', 'pyp', '.p.', '.g.'], { p: '#ff9fd0', y: '#ffd166', g: '#3fa45a' })],
+  ['Propeller Cap', (g) => { g.sprite(14, 0, ['rrr.bbb', '...k...'], { r: '#ff3d5a', b: '#3d8bff', k: K }); g.shape(11, 2, ['...yyyyyyyy', '.yyrrrbbbbyyy', 'yyrrrrbbbbbyyy', 'yyyyyyyyyyyyyy', 'yyyyyyyyyyyyyy'], { y: '#ffd23f', r: '#ff3d5a', b: '#3d8bff' }); }],
+  ['Party Hat', (g) => g.shape(14, 0, ['...w..', '..pp..', '..yp..', '.pyyp.', '.ypyp.', 'pyyppy', 'pppppp'], { w: WHITE, p: '#ef476f', y: '#ffd166' })],
+];
+
+const C = { red: '#d6334a', white: '#f4f4f8', gold: '#f5c242', navy: '#22305e', blue: '#3d6fff' };
+const OUTFITS = [
+  ['Hoodie', (g) => { g.cloth('#ff8a1f', 19); g.sprite(12, 18, ['oo........oo', 'oo........oo'], { o: '#c96a10' }); g.sprite(16, 21, ['w..w', 'w..w', 'w..w'], { w: WHITE }); }],
+  ['T-Shirt', (g, s) => { g.cloth(C.white); g.sprite(15, 20, ['ssss', '.ss.'], { s }); }],
+  ['Leather Jacket', (g) => { g.cloth('#25232c'); g.cloth(C.white, 20, (x) => x >= 16 && x <= 19); g.sprite(12, 20, ['kk......kk', '.kk....kk.', '..k....k..'], { k: '#4a4a5e' }); }],
+  ['Denim Jacket', (g) => { g.cloth('#4a6fb0'); g.cloth(C.white, 20, (x) => x >= 16 && x <= 19); g.sprite(11, 20, ['dddd....dddd', '.ddd....ddd.'], { d: '#7fa0d8' }); }],
+  ['Suit', (g) => { g.cloth(C.navy); g.cloth(C.white, 20, (x, y) => x >= 15 && x <= 20 && y < 25 - Math.abs(x - 17.5) / 2); g.sprite(17, 20, ['rr', 'rr', 'rr', 'rr', '.r'], { r: C.red }); }],
+  ['Tracksuit', (g) => { g.cloth('#2f9a4a'); g.rect(17, 20, 1, 12, '#c9d1dd'); for (let y = 21; y < 32; y++) { g.set(7 + (y > 22 ? 0 : 1), y, WHITE); g.set(28 - (y > 22 ? 0 : 1), y, WHITE); } }],
+  ['Hawaiian Shirt', (g) => { g.cloth('#2fb8a0'); for (const [x, y] of [[9, 23], [13, 26], [19, 22], [23, 25], [26, 29], [11, 29], [17, 28], [21, 30]]) g.sprite(x, y, ['.p.', 'pyp', '.p.'], { p: '#ff7ab8', y: '#ffd23f' }); }],
+  ['Puffer', (g) => { g.cloth('#e8344f'); for (const y of [23, 26, 29]) g.rect(7, y, 22, 1, '#a31f35'); g.rect(17, 20, 1, 12, '#3a3a4a'); }],
+  ['Sweater', (g) => { g.cloth('#7a4fd6'); g.rect(13, 20, 10, 1, '#a98bff'); g.rect(6, 25, 24, 2, '#ffd23f'); }],
+  ['Tank Top', (g) => g.cloth(C.white, 21, (x) => x >= 12 && x <= 23)],
+  ['Jersey', (g) => { g.cloth('#3d6fff'); g.rect(14, 20, 8, 1, WHITE); g.sprite(17, 23, ['www', '..w', '.w.', '.w.', '.w.'], { w: WHITE }); }],
+  ['Lab Coat', (g) => { g.cloth(C.white); g.sprite(13, 20, ['kk......kk', '.kk....kk.', '..kk..kk..', '...k..k...'], { k: '#b8bfcc' }); g.sprite(22, 24, ['bkr', 'kkk'], { b: C.blue, r: C.red, k: '#b8bfcc' }); }],
+  ['Kimono', (g) => { g.cloth('#c0392b'); g.sprite(13, 20, ['ww......ww', '.ww....ww.', '..ww..ww..', '...wwww...'], { w: '#fff1dc' }); g.rect(6, 28, 24, 2, '#f5c242'); }],
+  ['Raincoat', (g) => { g.cloth('#ffd23f'); for (const y of [23, 26, 29]) g.set(19, y, '#3a3a4a'); g.rect(13, 20, 10, 1, '#e8b000'); }],
+  ['Overalls', (g) => { g.cloth(C.white); g.cloth('#4a6fb0', 24); g.rect(12, 20, 2, 4, '#4a6fb0'); g.rect(22, 20, 2, 4, '#4a6fb0'); g.set(12, 24, C.gold); g.set(23, 24, C.gold); }],
+  ['Turtleneck', (g) => { g.cloth('#25232c', 18); g.rect(14, 18, 8, 2, '#3a3842'); }],
+  ['Varsity Jacket', (g) => { g.cloth('#c0392b'); g.cloth(C.white, 21, (x) => x < 10 || x > 25); g.sprite(12, 23, ['ww.', 'w.w', 'ww.', 'w..'], { w: WHITE }); }],
+  ['Trench Coat', (g) => { g.cloth('#c9a26b'); g.rect(6, 27, 24, 1, '#7a5a32'); g.sprite(14, 20, ['dd....dd', '.dd..dd.', '..dddd..'], { d: '#a8844a' }); }],
+  ['Tie-Dye', (g) => { const cs = ['#ff7ab8', '#ffd23f', '#3fc8ff', '#8f7bff']; for (const [x, y] of BODY_CELLS) if (y >= 20) g.set(x, y, cs[Math.floor(Math.hypot(x - 17, y - 27) / 2) % 4]); }],
+  ['Gold Chain', (g) => g.sprite(13, 20, ['y........y', '.y......y.', '..yyyyyy..', '....YY....', '....YY....'], { y: '#f5c242', Y: '#c9902a' })],
 ];
 
 // ---------------------------------------------------------------------------
@@ -393,60 +254,68 @@ export function mulberry32(seed) {
   };
 }
 
-export const TRAIT_TYPES = ['Character', 'Body', 'Background', 'Eyes', 'Headwear', 'Outfit', 'Item'];
-const valueOf = (c, k) => (Array.isArray(c[k]) ? c[k][0] : c[k]);
-const traitsOf = (c, id) => ({ id, ...Object.fromEntries(TRAIT_TYPES.map((k) => [k, valueOf(c, k)])) });
+const byName = (list) => Object.fromEntries(list.map((o) => [o[0], o[1]]));
+const TABLES = {
+  Fur: byName(FURS),
+  Background: byName(BACKGROUNDS),
+  Eyes: byName(EYES),
+  Mouth: byName(MOUTHS),
+  Headwear: byName(HEADWEAR),
+  Outfit: byName(OUTFITS),
+};
+export const TRAIT_TYPES = ['Fur', 'Background', 'Eyes', 'Mouth', 'Headwear', 'Outfit'];
+export const TRAITS = Object.fromEntries(TRAIT_TYPES.map((k) => [k, Object.keys(TABLES[k])]));
 
-// Every trait value is worn by exactly one character.
-for (const k of TRAIT_TYPES) {
-  const values = CHARACTERS.map((c) => valueOf(c, k));
-  const dupes = values.filter((v, i) => values.indexOf(v) !== i);
-  if (dupes.length) throw new Error(`${k} repeats: ${dupes.join(', ')}`);
-}
+// Purrl #0 is the logo itself: a cream head on ink, nothing else.
+export const GENESIS = { id: 0, Fur: 'Genesis', Background: 'Ink' };
 
-export const GENESIS = traitsOf(CHARACTERS[0], 0);
-export const TRAITS = Object.fromEntries(TRAIT_TYPES.map((k) => [k, CHARACTERS.map((c) => valueOf(c, k))]));
+// The fur must stand apart from the background.
+const clashes = (t) => distance(TABLES.Fur[t.Fur], TABLES.Background[t.Background]) < 80;
 
-// The collection is hand-designed, so there is nothing to roll.
-export function generateCollection() {
-  return CHARACTERS.map((c, id) => traitsOf(c, id));
+// Each trait list is shuffled once and dealt out, so no value repeats.
+export function generateCollection(seed = SEED) {
+  const rand = mulberry32(seed);
+  const shuffle = (list) => {
+    const a = [...list];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+  for (;;) {
+    const dealt = Object.fromEntries(TRAIT_TYPES.map((k) => [k, shuffle(TRAITS[k])]));
+    const items = [GENESIS];
+    for (let i = 0; i < SUPPLY - 1; i++) items.push({ id: i + 1, ...Object.fromEntries(TRAIT_TYPES.map((k) => [k, dealt[k][i]])) });
+    if (!items.slice(1).some(clashes)) return items;
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Rendering
 
 export const STAGES = ['Logo', 'Silhouette', 'Light', 'Face', 'Traits'];
-const byName = new Map(CHARACTERS.map((c) => [c.Character, c]));
-// Eyewear that replaces the drawn eyes.
-const COVERED = new Set(['Eye Patch', 'Goggles', 'Snorkel Mask', 'Narrow']);
 
 // Returns SIZE×SIZE hex colours, row-major. `stage` stops the build early.
 export function renderGrid(t, stage = STAGES.length - 1) {
-  const c = byName.get(t.Character) ?? CHARACTERS[0];
   const g = new Grid();
-  const logo = stage === 0;
-  const body = logo ? CREAM : c.Body[1];
-  const bg = logo ? INK : c.Background[1];
+  const genesis = t.Fur === 'Genesis' || stage === 0;
+  const fur = genesis ? CREAM : TABLES.Fur[t.Fur];
+  const bg = genesis ? INK : TABLES.Background[t.Background];
+  const face = faceOf(fur);
   g.rect(0, 0, SIZE, SIZE, bg);
-  const r = ramp(body);
-  for (const [x, y] of CAT_CELLS) g.set(x, y, stage >= 2 ? r[toneAt(x, y)] : body);
+  const rf = ramp(fur), rface = ramp(face);
+  for (const [x, y] of HEAD_CELLS) g.set(x, y, stage >= 2 ? (inFace(x, y) ? rface[LIGHT.has(y * SIZE + x) ? 0 : 1] : rf[tone(x, y, inHead)]) : fur);
+  for (const [x, y] of BODY_CELLS) g.set(x, y, stage >= 2 ? rf[tone(x, y, inBody)] : fur);
+  if (stage >= 2) for (let x = 14; x <= 21; x++) g.set(x, 18, rf[2]); // the chin's shadow on the neck
   if (bg !== INK) for (const [x, y] of OUTLINE_CELLS) g.set(x, y, INK);
-  if (stage < 2) return g.px;
-  const ink = luminance(body) < 0.4 ? FACE_LIGHT : FACE;
-  if (stage >= 4) {
-    // A hat fills the notch between the peaks so it sits on the head.
-    c.draw?.(g);
-    if (c.notch)
-      for (let y = 13; y <= 15; y++)
-        for (let x = 13; x <= 18; x++) if ([INK, c.Background[1]].includes(g.get(x, y))) g.set(x, y, ramp(c.notch)[1]);
-  }
-  if (stage >= 3) {
-    const [eyes, mouth] = c.face;
-    if (stage < 4 || !COVERED.has(c.Eyes)) EYES[eyes]?.(g, ink);
-    else if (c.Eyes === 'Eye Patch') EYES.dot(g, ink);
-    if (c.Character === 'Ninja' && stage >= 4) { g.rect(14, 19, 2, 1, FACE_LIGHT); g.rect(18, 19, 2, 1, FACE_LIGHT); g.set(15, 19, INK); g.set(19, 19, INK); }
-    if (mouth) MOUTHS[mouth](g, ink);
-  }
+  if (stage < 3) return g.px;
+  if (genesis) { eyesWith(K)(g, fur); TABLES.Mouth.Line(g); return g.px; }
+  g.set(25, 13, mix(face, K, 0.6)); // nostril
+  if (stage >= 4) TABLES.Outfit[t.Outfit](g, face);
+  TABLES.Eyes[t.Eyes](g, fur);
+  TABLES.Mouth[t.Mouth](g, fur);
+  if (stage >= 4) TABLES.Headwear[t.Headwear](g);
   return g.px;
 }
 
@@ -464,14 +333,14 @@ export function renderRGBA(t, stage) {
   return out;
 }
 
-// ERC-721 style attribute list ("None" traits are left out).
+// ERC-721 style attribute list.
 export function attributes(t) {
-  return TRAIT_TYPES.filter((k) => t[k] && t[k] !== 'None').map((k) => ({ trait_type: k, value: t[k] }));
+  return TRAIT_TYPES.filter((k) => t[k]).map((k) => ({ trait_type: k, value: t[k] }));
 }
 
 // --- Rarity ------------------------------------------------------------------
 
-const ACCESSORIES = ['Headwear', 'Outfit', 'Item'];
+const ACCESSORIES = ['Headwear', 'Outfit'];
 export const accessoryCount = (t) => ACCESSORIES.filter((k) => t[k] && t[k] !== 'None').length;
 
 // Trait counts (every value is 1/1) and a rank kept for API compatibility.

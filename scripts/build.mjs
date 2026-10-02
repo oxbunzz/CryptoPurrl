@@ -73,7 +73,7 @@ if (process.argv.includes('--all')) {
       name: `CryptoPurrl #${t.id}`,
       description: t.id === 0
         ? 'Genesis. The Purrl logo itself, the silhouette every other Purrl is grown from.'
-        : 'One of 20 CryptoPurrls: 32×32 hand-designed pixel characters grown from the Purrl logo. Every trait is a 1/1.',
+        : 'One of 20 CryptoPurrls: 32×32 pixel PFPs grown from the Purrl logo. Every trait is a 1/1.',
       image: `ipfs://<IMAGES_CID>/${t.id}.png`,
       attributes: attributes(t),
     });

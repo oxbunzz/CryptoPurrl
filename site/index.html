@@ -199,8 +199,8 @@ td.type { color: var(--muted); }
       </div>
       <div class="pitch">
         <p class="eyebrow">Bộ sưu tập pixel 32×32</p>
-        <h1>Một logo. Hai mươi nhân vật.</h1>
-        <p class="lede">20 nhân vật vẽ tay, mỗi con một chủ đề riêng: phi hành gia, samurai, phù thuỷ, DJ, ninja, vua… Đầu là logo thu về 12×12, nhân vật nhỏ, chân chạm mép dưới ảnh và quay sang phải. Không có trait nào xuất hiện hai lần trong cả bộ.</p>
+        <h1>Một logo. Hai mươi PFP.</h1>
+        <p class="lede">20 chân dung pixel kiểu PFP: đầu là khối logo, quay 3/4 sang phải, mặt sáng màu, mắt to nhìn phải, vai cắt ở mép dưới. Lông, nền, mắt, miệng, mũ và áo: mỗi giá trị chỉ xuất hiện đúng một lần trong cả bộ.</p>
         <div class="lot-card" aria-live="polite">
           <div class="lot-head">
             <span class="pixel" id="lot-id">#0</span>
@@ -236,7 +236,7 @@ td.type { color: var(--muted); }
     <section id="provenance" aria-labelledby="provenance-h">
       <div class="sec-head">
         <h2 id="provenance-h">Provenance</h2>
-        <p>Cả 20 nhân vật được vẽ bằng code trong một file duy nhất. Hash được tính trên pixel RGBA gốc, nên kết quả giống hệt nhau trên mọi máy và mọi trình duyệt.</p>
+        <p>Cả 20 PFP được dựng bằng code từ một seed cố định. Hash được tính trên pixel RGBA gốc, nên kết quả giống hệt nhau trên mọi máy và mọi trình duyệt.</p>
       </div>
       <div class="prov">
         <div>
@@ -300,7 +300,7 @@ const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const all = generateCollection();
 const { counts } = rarity(all);
-const TYPE_VI = { Character: 'Nhân vật', Body: 'Thân', Background: 'Nền', Eyes: 'Mắt', Headwear: 'Mũ', Outfit: 'Trang phục', Item: 'Đồ vật' };
+const TYPE_VI = { Fur: 'Lông', Background: 'Nền', Eyes: 'Mắt', Mouth: 'Miệng', Headwear: 'Mũ', Outfit: 'Áo' };
 const valueOf = (t, k) => t[k] ?? 'None';
 const label = (k, v) => (v === 'None' ? (k === 'Eyes' ? 'Bị che' : 'Không có') : v);
 const shownTypes = (t) => TRAIT_TYPES.filter((k) => t[k] && t[k] !== 'None');
@@ -408,7 +408,7 @@ function more() {
     const b = thumb(t, 'card');
     const meta = document.createElement('span');
     meta.className = 'meta';
-    meta.innerHTML = `<b>#${t.id}</b><span>${t.Character}</span>`;
+    meta.innerHTML = `<b>#${t.id}</b><span>${t.Headwear ?? 'Genesis'}</span>`;
     b.append(meta);
     frag.append(b);
   }
