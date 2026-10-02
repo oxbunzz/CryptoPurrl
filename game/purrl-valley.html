@@ -1,0 +1,466 @@
+<title>Purrl Valley</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Nunito:wght@500;700;800&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: a farm-board page. The pixel map is the hero; the wallet strip sits above it,
+   and the tools (plot, shop, market, leaderboard) stack beside it, or below on phones. */
+:root {
+  --sky: #eaf4e2;      /* page ground: pale meadow */
+  --panel: #fffdf6;    /* panels: paper */
+  --ink: #2b2433;      /* text and pixel outlines */
+  --muted: #6f6878;
+  --line: #d9d2c3;
+  --grass: #8fd16a;
+  --soil: #c99a6b;
+  --purr: #f2a93b;     /* the token: harvest gold */
+  --usdt: #3fa48a;
+  --danger: #d6455a;
+  --display: "Pixelify Sans", "Courier New", monospace;
+  --body: "Nunito", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+html, body { height: auto; }
+body { background: var(--sky); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.45; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 18px 40px; display: grid; gap: 14px; }
+header.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 20px; }
+h1 { font-family: var(--display); font-weight: 700; font-size: clamp(28px, 5vw, 40px); line-height: 1; margin: 0; letter-spacing: .5px; }
+h1 span { color: var(--purr); }
+.tag { color: var(--muted); font-size: 13px; margin: 4px 0 0; }
+h2 { font-family: var(--display); font-weight: 700; font-size: 18px; margin: 0; letter-spacing: .3px; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+.wallet { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
+.chip { background: var(--panel); border: 2px solid var(--ink); border-radius: 0; padding: 6px 10px; display: grid; gap: 0; min-width: 0; box-shadow: 3px 3px 0 var(--ink); }
+.chip small { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; font-weight: 800; }
+.chip b { font-family: var(--mono); font-size: 16px; font-variant-numeric: tabular-nums; }
+.chip.purr b { color: #b06d0e; }
+.chip.usdt b { color: #24745f; }
+
+.board { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .board { grid-template-columns: minmax(0, 1fr); } }
+.mapbox { background: #5aa64a; border: 3px solid var(--ink); box-shadow: 5px 5px 0 var(--ink); line-height: 0; position: relative; }
+canvas#map { width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; display: block; cursor: pointer; touch-action: manipulation; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border: 1px solid var(--ink); margin-right: 5px; vertical-align: -1px; }
+
+.side { display: grid; gap: 14px; min-width: 0; }
+.card { background: var(--panel); border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); padding: 14px; display: grid; gap: 10px; min-width: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.kv { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+.kv span:first-child { color: var(--muted); }
+button { font: 700 14px var(--body); color: var(--ink); background: #fff; border: 2px solid var(--ink); padding: 7px 11px; cursor: pointer; box-shadow: 2px 2px 0 var(--ink); }
+button:hover:not(:disabled) { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--ink); }
+button:active:not(:disabled) { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.go { background: var(--purr); }
+button.sell { background: #ffd9de; }
+button.buy { background: #d6f2e7; }
+button:focus-visible, input:focus-visible { outline: 3px solid #3d6fff; outline-offset: 2px; }
+input[type=number] { font: 500 15px var(--mono); width: 100%; min-width: 0; padding: 7px 9px; border: 2px solid var(--ink); background: #fff; color: var(--ink); }
+.shop { display: grid; grid-template-columns: 1fr auto auto; gap: 6px 8px; align-items: center; font-size: 14px; }
+.shop .p { font-family: var(--mono); color: #b06d0e; }
+.bar { height: 10px; border: 2px solid var(--ink); background: #fff; }
+.bar i { display: block; height: 100%; background: var(--grass); }
+.note { font-size: 13px; color: var(--muted); margin: 0; }
+.inv { display: flex; flex-wrap: wrap; gap: 6px; }
+.inv span { font-size: 12px; border: 1px solid var(--line); background: #fff; padding: 2px 7px; }
+.lb { display: grid; gap: 4px; font-size: 14px; }
+.lb div { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: center; }
+.lb .me { font-weight: 800; }
+.lb .dot { width: 12px; height: 12px; border: 1px solid var(--ink); }
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: #fff; padding: 9px 14px; font-weight: 700; font-size: 14px; max-width: calc(100% - 32px); z-index: 10; }
+.banner { background: #fff3cf; border: 2px solid var(--ink); padding: 10px 12px; font-size: 14px; }
+.how ol { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }
+svg.spark { width: 100%; height: 54px; display: block; }
+@media (prefers-reduced-motion: reduce) { button:hover:not(:disabled), button:active:not(:disabled) { transform: none; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Purrl <span>Valley</span></h1>
+      <p class="tag">Mua đất, xây nhà, trồng rau, đào PURR. Coin trong game là coin ảo để chơi thử.</p>
+    </div>
+    <div class="wallet" id="wallet" aria-live="polite"></div>
+  </header>
+  <div id="banner"></div>
+  <div class="board">
+    <div>
+      <div class="mapbox"><canvas id="map" width="256" height="160" aria-label="Bản đồ đất Purrl Valley"></canvas></div>
+      <div class="legend">
+        <span><i style="background:#8fd16a"></i>Đất trống, đang bán</span>
+        <span><i style="background:#c99a6b;outline:2px solid #f2a93b;outline-offset:-3px"></i>Đất của bạn (viền vàng)</span>
+        <span><i style="background:#c99a6b"></i>Đất người khác (viền màu chủ đất)</span>
+      </div>
+    </div>
+    <aside class="side">
+      <section class="card" id="plot"></section>
+      <section class="card" id="shop"></section>
+      <section class="card" id="market"></section>
+      <section class="card" id="board"></section>
+      <section class="card how">
+        <h2>Cách chơi</h2>
+        <ol>
+          <li>Nhận gói khởi đầu, rồi bấm một ô cỏ trên bản đồ để mua đất.</li>
+          <li>Mua hạt giống và gỗ, đá ở cửa hàng bằng PURR.</li>
+          <li>Trồng rau để thu hoạch, hoặc xây nhà để đào PURR theo giờ.</li>
+          <li>PURR làm ra nằm ở mục Đang đào. Cứ 10 phút được claim một lần, phí claim 5%.</li>
+          <li>Bán PURR lấy USDT ở chợ, hoặc mua thêm PURR. Giá chạy theo cung cầu của mọi người chơi.</li>
+        </ol>
+      </section>
+    </aside>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+// ---------- Game rules (prototype numbers, coin is play money) ----------
+const MAP_W = 16, MAP_H = 10, T = 16;
+const START = { purr: 500, usdt: 100 };
+const LAND_BASE = 100, LAND_STEP = 5;               // land price rises with every plot sold
+const CLAIM_CD = 10 * 60 * 1000, CLAIM_FEE = 0.05;
+const POOL0 = { purr: 100000, usdt: 10000 };         // exchange pool opening reserves, price 0.1
+const SWAP_FEE = 0.003;
+const ITEMS = {
+  wood:    { name: 'Gỗ', price: 8 },
+  stone:   { name: 'Đá', price: 12 },
+  carrot:  { name: 'Hạt cà rốt', price: 10 },
+  tomato:  { name: 'Hạt cà chua', price: 25 },
+  pumpkin: { name: 'Hạt bí ngô', price: 60 },
+};
+const CROPS = {
+  carrot:  { name: 'Cà rốt',  grow: 2 * 60e3,  yield: 16 },
+  tomato:  { name: 'Cà chua', grow: 5 * 60e3,  yield: 42 },
+  pumpkin: { name: 'Bí ngô',  grow: 15 * 60e3, yield: 105 },
+};
+const HOUSE = [null,
+  { name: 'Nhà gỗ',   rate: 30,  cost: { wood: 10, stone: 8 } },
+  { name: 'Nhà ngói', rate: 60,  cost: { wood: 20, stone: 16 } },
+  { name: 'Biệt thự', rate: 100, cost: { wood: 40, stone: 30 } },
+];
+
+// ---------- State ----------
+let db = null, user = null, me = null, canWrite = null;
+let land = {}, farms = {}, pool = null, names = {}, colors = {};
+let sel = null, busy = false;
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = (n, d = 1) => Number(n).toLocaleString('vi-VN', { minimumFractionDigits: d, maximumFractionDigits: d });
+const key = (x, y) => x + '_' + y;
+const mins = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => (t.hidden = true), 2600); }
+
+const myFarm = () => (me && farms[me]) || null;
+const soldCount = () => Object.keys(land).length;
+const landPrice = () => LAND_BASE + LAND_STEP * soldCount();
+const price = () => { const p = pool || POOL0; return p.usdt / p.purr; };
+function houseRate(f) { let r = 0; for (const p of Object.values(f.plots || {})) if (p.kind === 'house') r += HOUSE[p.level].rate; return r; }
+function pendingNow(f, now = Date.now()) { return (f.pending || 0) + houseRate(f) * Math.max(0, now - (f.accrueAt || now)) / 3600e3; }
+function clone(o) { return JSON.parse(JSON.stringify(o)); }
+function accrued(f) { const g = clone(f), now = Date.now(); g.pending = pendingNow(f, now); g.accrueAt = now; return g; }
+
+// ---------- Pixel art ----------
+const cv = $('map'), cx = cv.getContext('2d');
+cv.width = MAP_W * T; cv.height = MAP_H * T;
+function hash(a, b, c = 0) { let h = (a * 374761393 + b * 668265263 + c * 2147483647) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+function px(x, y, c) { cx.fillStyle = c; cx.fillRect(x, y, 1, 1); }
+function sprite(ox, oy, rows, pal) { rows.forEach((r, y) => [...r].forEach((ch, x) => { if (pal[ch]) px(ox + x, oy + y, pal[ch]); })); }
+const HOUSE_ART = [
+  '................',
+  '..KK............',
+  '.KRRK......KK...',
+  '.KRRK.....KRRK..',
+  '.KRRRKKKKKKRRRK.',
+  '.KRRRRRRRRRRRRK.',
+  'KRRRRRRRRRRRRRRK',
+  'KKKKKKKKKKKKKKKK',
+  '.KWWWWWWWWWWWWK.',
+  '.KWBBWWWWWDDWWK.',
+  '.KWBBWWWWWDDWWK.',
+  '.KWWWWWWWWDdWWK.',
+  '.KWWWWWWWWDDWWK.',
+  '.KKKKKKKKKKKKKK.',
+  '................',
+  '................',
+];
+const ROOFS = [null, '#a8724c', '#d6455a', '#7a4ad6'];
+const PLANT = {
+  seed:    ['     ', '     ', '  s  ', '     ', '     '],
+  sprout:  ['     ', '  g  ', ' g g ', '  g  ', '     '],
+  grow:    [' g g ', '  g  ', ' ggg ', '  g  ', '     '],
+  carrot:  [' g g ', '  g  ', ' ooo ', '  o  ', '     '],
+  tomato:  [' grg ', 'grgrg', ' ggg ', '  g  ', '     '],
+  pumpkin: ['  g  ', ' ooo ', 'ooooo', ' ooo ', '     '],
+};
+function drawTile(x, y, now) {
+  const ox = x * T, oy = y * T, k = key(x, y), l = land[k];
+  // grass
+  cx.fillStyle = '#8fd16a'; cx.fillRect(ox, oy, T, T);
+  for (let i = 0; i < 10; i++) px(ox + Math.floor(hash(x, y, i) * T), oy + Math.floor(hash(y, x, i + 7) * T), hash(x, y, i + 99) < .5 ? '#7cc05a' : '#a6e07c');
+  if (!l) return;
+  // owned soil with fence in the owner's colour
+  cx.fillStyle = '#c99a6b'; cx.fillRect(ox + 1, oy + 1, T - 2, T - 2);
+  cx.fillStyle = '#b4875a'; for (let r = 3; r < T - 2; r += 3) cx.fillRect(ox + 2, oy + r, T - 4, 1);
+  const fence = l.owner === me ? '#f2a93b' : (colors[l.owner] || '#6f6878');
+  cx.strokeStyle = fence; cx.lineWidth = 1; cx.strokeRect(ox + .5, oy + .5, T - 1, T - 1);
+  [[0, 0], [T - 1, 0], [0, T - 1], [T - 1, T - 1]].forEach(([a, b]) => px(ox + a, oy + b, '#2b2433'));
+  const f = farms[l.owner], p = f && f.plots && f.plots[k];
+  if (!p) return;
+  if (p.kind === 'house') {
+    sprite(ox, oy, HOUSE_ART, { K: '#2b2433', R: ROOFS[p.level], W: '#fff4dc', B: '#7fd6ff', D: '#8a5a3c', d: '#ffd23f' });
+    if (p.level >= 2) { px(ox + 12, oy + 1, '#2b2433'); px(ox + 12, oy + 2, '#2b2433'); px(ox + 13, oy + 0, '#cfc8d6'); }
+    if (p.level >= 3) { px(ox + 2, oy + 0, '#ffd23f'); px(ox + 3, oy + 0, '#ffd23f'); }
+  } else if (p.kind === 'crop') {
+    const c = CROPS[p.crop], t = (now - p.plantedAt) / c.grow;
+    const stage = t >= 1 ? p.crop : t > .6 ? 'grow' : t > .25 ? 'sprout' : 'seed';
+    const pal = { g: '#3f8a3a', s: '#6b4a2a', o: p.crop === 'carrot' ? '#ff8a1f' : '#f28a1f', r: '#e8344f' };
+    [[2, 2], [9, 2], [2, 9], [9, 9]].forEach(([a, b]) => sprite(ox + a, oy + b, PLANT[stage], pal));
+    if (t >= 1 && Math.floor(now / 500) % 2) { px(ox + 7, oy + 1, '#fff'); px(ox + 8, oy + 1, '#fff'); }
+  }
+}
+function draw() {
+  const now = Date.now();
+  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) drawTile(x, y, now);
+  if (sel) { const [x, y] = sel.split('_').map(Number); cx.strokeStyle = Math.floor(now / 400) % 2 ? '#ffffff' : '#2b2433'; cx.lineWidth = 1; cx.strokeRect(x * T + .5, y * T + .5, T - 1, T - 1); }
+}
+cv.addEventListener('click', (e) => {
+  const r = cv.getBoundingClientRect();
+  const x = Math.floor((e.clientX - r.left) / r.width * MAP_W), y = Math.floor((e.clientY - r.top) / r.height * MAP_H);
+  if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) return;
+  sel = key(x, y); draw(); renderPlot();
+});
+
+// ---------- Rendering ----------
+function renderWallet() {
+  const f = myFarm();
+  if (!f) { $('wallet').innerHTML = `<div class="chip"><small>Giá PURR</small><b>$${fmt(price(), 4)}</b></div>`; return; }
+  const now = Date.now(), left = CLAIM_CD - (now - (f.lastClaim || 0));
+  $('wallet').innerHTML = `
+    <div class="chip purr"><small>Ví PURR</small><b>${fmt(f.purr)}</b></div>
+    <div class="chip usdt"><small>Ví USDT</small><b>${fmt(f.usdt, 2)}</b></div>
+    <div class="chip purr"><small>Đang đào · ${fmt(houseRate(f), 0)}/giờ</small><b>${fmt(pendingNow(f, now), 2)}</b></div>
+    <div class="chip"><small>Giá PURR</small><b>$${fmt(price(), 4)}</b></div>
+    <button class="go" data-act="claim" ${left > 0 || busy ? 'disabled' : ''}>${left > 0 ? 'Claim sau ' + mins(left) : 'Claim PURR'}</button>`;
+}
+function invHtml(f) {
+  const inv = f.inv || {};
+  const parts = Object.keys(ITEMS).filter((k) => inv[k]).map((k) => `<span>${esc(ITEMS[k].name)}: <b class="num">${inv[k]}</b></span>`);
+  return parts.length ? `<div class="inv">${parts.join('')}</div>` : '<p class="note">Kho trống. Mua gỗ, đá và hạt giống ở cửa hàng.</p>';
+}
+function costText(c) { return `${c.wood} gỗ, ${c.stone} đá`; }
+function hasCost(f, c) { const i = f.inv || {}; return (i.wood || 0) >= c.wood && (i.stone || 0) >= c.stone; }
+function renderPlot() {
+  const el = $('plot'), f = myFarm(), now = Date.now();
+  if (!sel) { el.innerHTML = `<h2>Ô đất</h2><p class="note">Bấm một ô trên bản đồ để xem, mua hoặc làm việc trên đó. Đã bán <b class="num">${soldCount()}</b>/${MAP_W * MAP_H} ô.</p>`; return; }
+  const [x, y] = sel.split('_').map(Number), l = land[sel];
+  let h = `<h2>Ô đất ${x + 1}·${y + 1}</h2>`;
+  if (!l) {
+    const pr = landPrice();
+    h += `<div class="kv"><span>Giá hiện tại</span><b class="num">${fmt(pr, 0)} PURR</b></div>
+      <p class="note">Mỗi ô bán ra làm giá ô tiếp theo tăng ${LAND_STEP} PURR.</p>
+      <button class="go" data-act="buyLand" ${!f || busy || f.purr < pr ? 'disabled' : ''}>Mua ô đất này</button>`;
+    if (f && f.purr < pr) h += `<p class="note">Bạn cần thêm ${fmt(pr - f.purr, 0)} PURR. Mua PURR ở chợ.</p>`;
+    el.innerHTML = h; return;
+  }
+  const mine = l.owner === me, owner = farms[l.owner], p = owner && owner.plots && owner.plots[sel];
+  h += `<div class="kv"><span>Chủ đất</span><b>${mine ? 'Bạn' : esc(names[l.owner] || 'Người chơi khác')}</b></div>`;
+  if (!p || p.kind === 'empty') {
+    h += `<div class="kv"><span>Hiện có</span><b>Đất trống</b></div>`;
+    if (mine) {
+      const c = HOUSE[1].cost, inv = f.inv || {};
+      h += `<button data-act="build" ${busy || !hasCost(f, c) ? 'disabled' : ''}>Xây ${HOUSE[1].name} (${costText(c)})</button>
+        <p class="note">Nhà đào ${HOUSE[1].rate} PURR/giờ. Hoặc trồng rau:</p><div class="row">` +
+        Object.entries(CROPS).map(([k, cr]) => `<button data-act="plant" data-crop="${k}" ${busy || !(inv[k] > 0) ? 'disabled' : ''}>${cr.name} (${inv[k] || 0})</button>`).join('') + `</div>`;
+    }
+  } else if (p.kind === 'house') {
+    const H = HOUSE[p.level];
+    h += `<div class="kv"><span>Công trình</span><b>${H.name} · cấp ${p.level}</b></div><div class="kv"><span>Đào được</span><b class="num">${H.rate} PURR/giờ</b></div>`;
+    if (mine && p.level < 3) { const N = HOUSE[p.level + 1]; h += `<button data-act="upgrade" ${busy || !hasCost(f, N.cost) ? 'disabled' : ''}>Nâng lên ${N.name} (${costText(N.cost)}) → ${N.rate}/giờ</button>`; }
+    if (mine && p.level === 3) h += `<p class="note">Đã đạt cấp tối đa.</p>`;
+  } else if (p.kind === 'crop') {
+    const c = CROPS[p.crop], t = Math.min(1, (now - p.plantedAt) / c.grow);
+    h += `<div class="kv"><span>Đang trồng</span><b>${c.name}</b></div><div class="bar" role="progressbar" aria-valuenow="${Math.round(t * 100)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${t * 100}%"></i></div>
+      <div class="kv"><span>${t >= 1 ? 'Đã chín' : 'Còn'}</span><b class="num">${t >= 1 ? '+' + c.yield + ' PURR' : mins(c.grow * (1 - t))}</b></div>`;
+    if (mine) h += `<button class="go" data-act="harvest" ${busy || t < 1 ? 'disabled' : ''}>Thu hoạch</button>`;
+  }
+  el.innerHTML = h;
+}
+function renderShop() {
+  const f = myFarm();
+  let h = `<h2>Cửa hàng</h2>`;
+  if (f) h += invHtml(f);
+  h += `<div class="shop">` + Object.entries(ITEMS).map(([k, it]) =>
+    `<span>${esc(it.name)} <span class="p">${it.price}</span></span>
+     <button data-act="buy" data-item="${k}" data-qty="1" ${!f || busy || f.purr < it.price ? 'disabled' : ''}>+1</button>
+     <button data-act="buy" data-item="${k}" data-qty="5" ${!f || busy || f.purr < it.price * 5 ? 'disabled' : ''}>+5</button>`).join('') + `</div>
+    <p class="note">Giá tính bằng PURR. PURR tiêu ở cửa hàng bị đốt khỏi lưu thông.</p>`;
+  $('shop').innerHTML = h;
+}
+function sparkline() {
+  const hs = (pool && pool.hist) || [];
+  if (hs.length < 2) return '<p class="note">Biểu đồ giá hiện ra sau vài lượt giao dịch.</p>';
+  const ps = hs.map((d) => d.p), lo = Math.min(...ps), hi = Math.max(...ps), span = hi - lo || hi * .01;
+  const pts = ps.map((p, i) => [i / (ps.length - 1) * 300, 48 - (p - lo) / span * 42]);
+  const line = pts.map((q) => q.map((v) => v.toFixed(1)).join(',')).join(' ');
+  const up = ps[ps.length - 1] >= ps[0], col = up ? '#3fa48a' : '#d6455a', last = pts[pts.length - 1];
+  return `<svg class="spark" viewBox="0 0 306 54" preserveAspectRatio="none" aria-label="Giá PURR qua các lượt giao dịch gần nhất">
+    <polygon points="0,52 ${line} 300,52" fill="${col}" fill-opacity=".15"/>
+    <polyline points="${line}" fill="none" stroke="${col}" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    <circle cx="${last[0]}" cy="${last[1]}" r="3" fill="${col}"/></svg>`;
+}
+function renderMarket() {
+  const f = myFarm(), p = pool || POOL0;
+  $('market').innerHTML = `<h2>Chợ PURR / USDT</h2>
+    <div class="kv"><span>Giá</span><b class="num">$${fmt(price(), 4)}</b></div>
+    ${sparkline()}
+    <div class="kv"><span>Thanh khoản</span><span class="num">${fmt(p.purr, 0)} PURR · ${fmt(p.usdt, 0)} USDT</span></div>
+    <label for="amt" class="note">Số lượng</label>
+    <input type="number" id="amt" min="0" step="any" placeholder="Ví dụ 100" ${!f ? 'disabled' : ''}>
+    <p class="note" id="quote">Nhập số để xem trước.</p>
+    <div class="row"><button class="sell" data-act="sell" ${!f || busy ? 'disabled' : ''}>Bán PURR lấy USDT</button><button class="buy" data-act="buyPurr" ${!f || busy ? 'disabled' : ''}>Dùng USDT mua PURR</button></div>
+    <p class="note">Chợ là một pool chung cho mọi người chơi, phí 0,3%. Bán nhiều thì giá giảm, mua nhiều thì giá tăng.</p>`;
+}
+function quote() {
+  const v = parseFloat(($('amt') || {}).value), q = $('quote');
+  if (!q) return;
+  if (!(v > 0)) { q.textContent = 'Nhập số để xem trước.'; return; }
+  const p = pool || POOL0;
+  q.textContent = `Bán ${fmt(v, 2)} PURR nhận ≈ ${fmt(swapOut(p.purr, p.usdt, v), 2)} USDT · Dùng ${fmt(v, 2)} USDT mua ≈ ${fmt(swapOut(p.usdt, p.purr, v), 2)} PURR`;
+}
+async function renderBoard() {
+  const ids = Object.keys(farms);
+  const rows = ids.map((id) => ({ id, earned: farms[id].earned || 0, plots: Object.keys(farms[id].plots || {}).length })).sort((a, b) => b.earned - a.earned).slice(0, 8);
+  if (user && ids.length) { try { const ps = await user.profiles(ids); for (const id of ids) { names[id] = ps[id].name; colors[id] = ps[id].color; } } catch (e) {} }
+  $('board').innerHTML = `<h2>Bảng nông dân</h2>` + (rows.length ? `<div class="lb">` + rows.map((r, i) =>
+    `<div class="${r.id === me ? 'me' : ''}"><span class="num">${i + 1}</span><span><span class="dot" style="display:inline-block;background:${r.id === me ? '#f2a93b' : esc(colors[r.id] || '#6f6878')}"></span> ${r.id === me ? 'Bạn' : esc(names[r.id] || 'Người chơi')} · ${r.plots} ô</span><b class="num">${fmt(r.earned, 0)}</b></div>`).join('') +
+    `</div><p class="note">Xếp theo tổng PURR đã claim.</p>` : `<p class="note">Chưa có ai vào làng. Hãy là người đầu tiên nhận đất.</p>`);
+  draw();
+}
+function renderBanner() {
+  const b = $('banner');
+  if (!db) { b.innerHTML = `<div class="banner">Đăng nhập Claude để chơi. Bản đồ chung lưu trên máy chủ của trang này.</div>`; return; }
+  if (canWrite === false) { b.innerHTML = `<div class="banner">Bạn đang xem ở quyền chỉ xem. Nhờ chủ trang cấp quyền Contributor để chơi.</div>`; return; }
+  if (me && !myFarm()) { b.innerHTML = `<div class="banner row"><span>Chào nông dân mới! Nhận gói khởi đầu ${START.purr} PURR và ${START.usdt} USDT (coin ảo) để bắt đầu.</span><button class="go" data-act="start" ${busy ? 'disabled' : ''}>Nhận gói khởi đầu</button></div>`; return; }
+  b.innerHTML = '';
+}
+function renderAll() { renderBanner(); renderWallet(); renderPlot(); renderShop(); renderMarket(); renderBoard(); }
+
+// ---------- Actions ----------
+function swapOut(rin, rout, amt) { const a = amt * (1 - SWAP_FEE); return rout * a / (rin + a); }
+async function saveFarm(f) { await db.doc('farms/' + me).set(f); farms[me] = f; }
+async function act(fn) {
+  if (busy) return;
+  busy = true; renderAll();
+  try { await fn(); } catch (e) { toast(e && e.userMsg ? e.userMsg : 'Không lưu được. Thử lại sau giây lát.'); console.error(e); }
+  busy = false; renderAll();
+}
+const fail = (m) => { const e = new Error(m); e.userMsg = m; throw e; };
+async function lease(ref) {
+  for (let i = 0; i < 6; i++) { const r = await ref.acquire({ holder: me, ttlMs: 4000 }); if (r.acquired) return; await new Promise((ok) => setTimeout(ok, 400 + Math.random() * 400)); }
+  fail('Đang có người giao dịch, thử lại sau giây lát.');
+}
+const actions = {
+  start: () => act(async () => {
+    const now = Date.now();
+    await saveFarm({ purr: START.purr, usdt: START.usdt, pending: 0, accrueAt: now, lastClaim: 0, earned: 0, inv: {}, plots: {}, createdAt: now });
+    toast('Đã nhận 500 PURR và 100 USDT. Chọn một ô cỏ để mua đất.');
+  }),
+  buyLand: () => act(async () => {
+    const k = sel, pr = landPrice(), f = accrued(myFarm());
+    if (f.purr < pr) fail('Không đủ PURR.');
+    const ref = db.doc('land/' + k);
+    await lease(ref);
+    const cur = await ref.get();
+    if (cur.exists && cur.data().owner) fail('Ô này vừa có người mua.');
+    await ref.set({ owner: me, at: Date.now() });
+    land[k] = { owner: me };
+    f.purr -= pr; f.plots[k] = { kind: 'empty' };
+    await saveFarm(f); toast('Đã mua ô đất với giá ' + fmt(pr, 0) + ' PURR.');
+  }),
+  buy: (d) => act(async () => {
+    const it = ITEMS[d.item], q = +d.qty, f = accrued(myFarm());
+    if (f.purr < it.price * q) fail('Không đủ PURR.');
+    f.purr -= it.price * q; f.inv[d.item] = (f.inv[d.item] || 0) + q;
+    await saveFarm(f);
+  }),
+  build: () => act(async () => {
+    const f = accrued(myFarm()), c = HOUSE[1].cost;
+    if (!hasCost(f, c)) fail('Thiếu gỗ hoặc đá.');
+    f.inv.wood -= c.wood; f.inv.stone -= c.stone; f.plots[sel] = { kind: 'house', level: 1 };
+    await saveFarm(f); toast('Đã xây nhà. Nhà bắt đầu đào PURR.');
+  }),
+  upgrade: () => act(async () => {
+    const f = accrued(myFarm()), p = f.plots[sel], c = HOUSE[p.level + 1].cost;
+    if (!hasCost(f, c)) fail('Thiếu gỗ hoặc đá.');
+    f.inv.wood -= c.wood; f.inv.stone -= c.stone; p.level += 1;
+    await saveFarm(f); toast('Đã nâng cấp lên ' + HOUSE[p.level].name + '.');
+  }),
+  plant: (d) => act(async () => {
+    const f = accrued(myFarm());
+    if (!(f.inv[d.crop] > 0)) fail('Hết hạt giống.');
+    f.inv[d.crop] -= 1; f.plots[sel] = { kind: 'crop', crop: d.crop, plantedAt: Date.now() };
+    await saveFarm(f);
+  }),
+  harvest: () => act(async () => {
+    const f = accrued(myFarm()), p = f.plots[sel], c = CROPS[p.crop];
+    if (Date.now() - p.plantedAt < c.grow) fail('Chưa chín.');
+    f.pending += c.yield; f.plots[sel] = { kind: 'empty' };
+    await saveFarm(f); toast('+' + c.yield + ' PURR vào mục Đang đào.');
+  }),
+  claim: () => act(async () => {
+    const f = accrued(myFarm()), now = Date.now();
+    if (now - (f.lastClaim || 0) < CLAIM_CD) fail('Chưa đến giờ claim.');
+    if (f.pending < .01) fail('Chưa có PURR để claim.');
+    const got = f.pending * (1 - CLAIM_FEE);
+    f.purr += got; f.earned = (f.earned || 0) + got; f.pending = 0; f.lastClaim = now;
+    await saveFarm(f); toast('Đã claim ' + fmt(got, 2) + ' PURR (đã trừ phí 5%).');
+  }),
+  sell: () => swap('sell'),
+  buyPurr: () => swap('buy'),
+};
+function swap(dir) {
+  const v = parseFloat(($('amt') || {}).value);
+  if (!(v > 0)) { toast('Nhập số lượng trước.'); return; }
+  return act(async () => {
+    const f = accrued(myFarm());
+    if (dir === 'sell' && f.purr < v) fail('Không đủ PURR.');
+    if (dir === 'buy' && f.usdt < v) fail('Không đủ USDT.');
+    const ref = db.doc('market/pool');
+    await lease(ref);
+    const s = await ref.get(), p = s.exists ? clone(s.data()) : { ...POOL0, hist: [] };
+    let out;
+    if (dir === 'sell') { out = swapOut(p.purr, p.usdt, v); p.purr += v; p.usdt -= out; f.purr -= v; f.usdt += out; }
+    else { out = swapOut(p.usdt, p.purr, v); p.usdt += v; p.purr -= out; f.usdt -= v; f.purr += out; }
+    p.hist = [...(p.hist || []), { t: Date.now(), p: p.usdt / p.purr }].slice(-60);
+    await ref.set(p); pool = p;
+    await saveFarm(f);
+    toast(dir === 'sell' ? `Đã bán ${fmt(v, 2)} PURR, nhận ${fmt(out, 2)} USDT.` : `Đã mua ${fmt(out, 2)} PURR bằng ${fmt(v, 2)} USDT.`);
+  });
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-act]');
+  if (!b || b.disabled) return;
+  if (!db || !me) { toast('Đăng nhập để chơi.'); return; }
+  const fn = actions[b.dataset.act];
+  if (fn) fn(b.dataset);
+});
+document.addEventListener('input', (e) => { if (e.target.id === 'amt') quote(); });
+
+// ---------- Live data ----------
+renderAll();
+setInterval(() => { draw(); renderWallet(); if (sel && !busy) renderPlot(); }, 1000);
+(async () => {
+  if (!window.claude) return;
+  [db, user] = await Promise.all([claude.use('db'), claude.use('user')]);
+  if (user) { me = await user.id(); canWrite = await user.can('data.write'); }
+  if (!db) { renderAll(); return; }
+  if (!me) { db = null; renderAll(); return; }
+  db.collection('land').onSnapshot((s) => { land = {}; s.docs.forEach((d) => { const v = d.data(); if (v && v.owner) land[d.id] = v; }); draw(); renderPlot(); renderBoard(); }, (e) => console.error(e));
+  db.collection('farms').onSnapshot((s) => { const n = {}; s.docs.forEach((d) => (n[d.id] = d.data())); farms = n; renderBanner(); renderWallet(); renderPlot(); renderShop(); renderBoard(); }, (e) => console.error(e));
+  db.doc('market/pool').onSnapshot((s) => { pool = s.exists ? s.data() : null; renderWallet(); const v = ($('amt') || {}).value; renderMarket(); if ($('amt')) { $('amt').value = v; quote(); } }, (e) => console.error(e));
+  renderAll();
+})();
+</script>
