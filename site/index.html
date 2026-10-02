@@ -217,7 +217,7 @@ td.type { color: var(--muted); }
       <div class="pitch">
         <p class="eyebrow">Bộ sưu tập pixel 24×24</p>
         <h1>Một logo. Mười nghìn con mèo.</h1>
-        <p class="lede">Mỗi CryptoPurrl giữ nguyên silhouette của logo: đầu vuông 14×14, tai trái cao, tai phải thấp, cằm vát. Trên đó là ánh sáng bốn tông, bóng đổ xuống nền, viền sáng hắt màu từ môi trường và những hạt lơ lửng trước lẫn sau con mèo. Tất cả do một seed cố định quyết định, nên ai cũng dựng lại được đúng 10.000 con.</p>
+        <p class="lede">Mỗi CryptoPurrl giữ nguyên silhouette của logo: đầu vuông 14×14, tai trái cao, tai phải thấp, cằm vát. Nền là một màu phẳng, viền mực sắc nét, còn toàn bộ màu sắc nằm trên con mèo. Tất cả do một seed cố định quyết định, nên ai cũng dựng lại được đúng 10.000 con.</p>
         <div class="lot-card" aria-live="polite">
           <div class="lot-head">
             <span class="pixel" id="lot-id">#0</span>
@@ -326,7 +326,7 @@ const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const all = generateCollection();
 const { counts, rank } = rarity(all);
-const TYPE_VI = { Fur: 'Lông', Background: 'Nền', Eyes: 'Mắt', Mouth: 'Miệng', Eyewear: 'Kính', Headwear: 'Mũ', Outfit: 'Trang phục', Earring: 'Khuyên tai', Aura: 'Hào quang' };
+const TYPE_VI = { Fur: 'Lông', Background: 'Nền', Eyes: 'Mắt', Mouth: 'Miệng', Eyewear: 'Kính', Headwear: 'Mũ', Outfit: 'Trang phục', Earring: 'Khuyên tai' };
 const valueOf = (t, k) => t[k] ?? 'None';
 const label = (k, v) => (v === 'None' ? (k === 'Eyes' ? 'Bị che' : 'Không có') : v);
 const shownTypes = (t) => (t.Fur === 'Genesis' ? ['Fur', 'Background'] : TRAIT_TYPES);

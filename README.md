@@ -15,16 +15,9 @@ Logo Purrl là một hình khối 14×14: đầu vuông, tai trái cao 3 ô, tai
 .############.      ← cằm vát
 ```
 
-## Chiều sâu
+## Phong cách
 
-Mỗi Purrl được dựng qua năm lớp: **Logo → Silhouette → Light → Face → Traits**.
-
-- **Ánh sáng bốn tông.** Mỗi pixel của con mèo mang một chất liệu (lông, vằn, vải…) và một tông (sáng, gốc, tối, khuất) lấy từ bản đồ ánh sáng vẽ tay, với nguồn sáng ở phía trên bên trái. Mỗi chất liệu được giãn thành bốn tông, trong đó vùng sáng ngả ấm, vùng tối ngả lạnh và tím. Đây là cách các họa sĩ pixel tạo khối.
-- **Bóng đổ.** Con mèo đổ bóng xuống nền, lệch 2px sang phải và 1px xuống dưới.
-- **Ánh sáng viền.** Mép trái hắt màu sáng của nền, mép phải hắt màu thứ hai, nên mỗi con như đang đứng trong môi trường của chính nó.
-- **Nền gradient dither.** Các dải màu phẳng nối với nhau bằng một dải dither Bayer hẹp, cộng thêm vignette ở bốn góc.
-- **Hai lớp hạt.** Trait Aura rải hạt vừa sau lưng vừa trước mặt con mèo. Hạt phía sau nhỏ và mờ, hạt phía trước lớn và sáng.
-- **Đồ vật có chiều sâu.** Vành đai Orbit đi vòng ra sau đầu rồi vòng lại phía trước. Lông Crystal và lọ Brain Jar trong suốt, nhìn xuyên được ra nền.
+Gọn như một con tem: **nền một màu phẳng, viền mực sắc, con mèo rực màu.** Mỗi chất liệu (lông, vằn, vải…) chỉ có hai tông là màu gốc và một tông bóng ở mép phải, dưới cằm và cổ. Mỗi Purrl được dựng qua năm lớp: **Logo → Silhouette → Light → Face → Traits**. Một bộ lông sẽ không bao giờ đi cùng nền trùng màu với nó.
 
 ## Huyền thoại
 
@@ -32,7 +25,7 @@ Mười bộ lông có số lượng cố định. Những bộ lông còn lại
 
 | Bộ lông | Số lượng | Đặc điểm |
 |---|---:|---|
-| **Genesis** | 1 | Purrl #0 chính là logo, được đùn sâu ba pixel xuyên qua một lăng kính, trên nền mực. |
+| **Genesis** | 1 | Purrl #0 chính là logo, được đùn sâu ba pixel xuyên qua một lăng kính, trên nền mực phẳng. |
 | **Pearl** | 9 | Lông xà cừ với những dải hồng, kem, bạc hà chạy chéo. Đây là nguồn gốc của cái tên *Purrl*. |
 | **Void** | 13 | Một hố đen hình con mèo: chỉ còn đôi mắt, viền neon tím và quầng sáng hắt ra nền. |
 | **Gold** | 24 | Vàng đánh bóng, có vệt loé chéo. Không bao giờ đi cùng phụ kiện vàng. |
@@ -52,18 +45,18 @@ Mười bộ lông có số lượng cố định. Những bộ lông còn lại
 Số con mang từng trait trong 10.000 Purrl:
 
 - **Fur**: Cream 1.266 · Ginger 1.231 · Smoke 988 · Midnight 887 · Tuxedo 818 · Calico 685 · Siamese 595 · Bubblegum 581 · Lilac 534 · Mint 491 · Tiger 373 · Moo 309 · Leopard 291 · Neon 290 · Rainbow 175 · Zombie 111 · Glitch 88 · Lava 77 · Crystal 66 · Chrome 55 · Cosmic 42 · Gold 24 · Void 13 · Pearl 9 · Genesis 1
-- **Background**: Sunset 1.132 · Lagoon 1.082 · Citrus 960 · Bubblegum 955 · Vaporwave 891 · Mint Soda 824 · Lavender 811 · Purrl Blue 731 · Aurora 574 · Ember 547 · Toxic 451 · Starfield 324 · Synthwave 281 · Matrix 180 · Prism 168 · Void 88 · Ink 1
-- **Eyes**: Emerald 1.293 · Amber 1.162 · Sapphire 1.044 · Copper 767 · Amethyst 569 · Sleepy 488 · Ruby 456 · Ice 336 · Hearts 305 · Stars 275 · Odd Eyes 271 · Wink 255 · Third Eye 190 · KO 186 · Neon Glow 139 · Void 134 · Cyclops 131 · Laser 96
-- **Mouth**: Purr 2.821 · Smile 1.793 · Blep 1.513 · Hiss 758 · Bubblegum 734 · Pipe 547 · Gold Grill 454 · Fish 433 · Rainbow Tongue 343 · Diamond Grill 237 · Tentacles 196 · Fire Breath 170
-- **Eyewear**: Shades 797 · Specs 612 · 3D Glasses 408 · Neon Visor 355 · Monocle 349 · Holo Shades 342 · Eye Patch 333 · Cyber Eye 174
-- **Headwear**: Headphones 614 · Top Hat 585 · Beanie 562 · Party Hat 479 · Flower 461 · Bow 458 · Mushroom 364 · Halo 340 · Antenna 340 · Devil Horns 332 · Wizard Hat 306 · Orbit 246 · Crystal Shards 245 · Flame 232 · Unicorn Horn 230 · Brain Jar 112 · Crown 104
-- **Outfit**: Collar & Bell 1.501 · Bow Tie 862 · Hoodie 824 · Gold Chain 807 · Suit 658 · Scarf 645 · Puffer 418 · Armor 336 · Pearl Necklace 325 · Astronaut 321 · Kimono 316 · Rune Robe 222
-- **Earring**: Pearl Earring 421 · Gold Hoop 325 · Diamond Stud 81
-- **Aura**: Sparkles 1.037 · Bubbles 679 · Fireflies 610 · Snow 605 · Embers 575 · Petals 513 · Hearts 481 · Glitch 322 · Orbs 307 · Lightning 218
+- **Background**: Sky 1.013 · Lemon 971 · Bubblegum 941 · Lime 898 · Periwinkle 871 · Mint 848 · Tangerine 842 · Coral 811 · Peach 806 · Lavender 796 · Purrl Blue 531 · Cloud 490 · Gold 104 · Night 77 · Ink 1
+- **Eyes**: Emerald 1.357 · Amber 1.158 · Sapphire 982 · Copper 733 · Amethyst 522 · Sleepy 503 · Ruby 431 · Ice 381 · Stars 289 · Odd Eyes 286 · Hearts 282 · KO 216 · Wink 207 · Neon Glow 153 · Cyclops 151 · Third Eye 145 · Void 138 · Laser 97
+- **Mouth**: Purr 2.771 · Smile 1.803 · Blep 1.565 · Hiss 776 · Bubblegum 705 · Pipe 594 · Gold Grill 443 · Fish 397 · Rainbow Tongue 327 · Diamond Grill 241 · Tentacles 204 · Fire Breath 173
+- **Eyewear**: Shades 811 · Specs 569 · 3D Glasses 471 · Holo Shades 346 · Eye Patch 341 · Neon Visor 340 · Monocle 336 · Cyber Eye 191
+- **Headwear**: Headphones 582 · Top Hat 576 · Beanie 551 · Party Hat 494 · Bow 484 · Flower 448 · Antenna 379 · Devil Horns 358 · Wizard Hat 349 · Mushroom 329 · Halo 320 · Flame 238 · Orbit 231 · Unicorn Horn 225 · Crystal Shards 220 · Crown 114 · Brain Jar 101
+- **Outfit**: Collar & Bell 1.560 · Gold Chain 870 · Hoodie 848 · Bow Tie 801 · Suit 641 · Scarf 618 · Puffer 452 · Astronaut 342 · Pearl Necklace 324 · Armor 308 · Kimono 295 · Rune Robe 197
+- **Earring**: Pearl Earring 451 · Gold Hoop 367 · Diamond Stud 98
 
 Một số luật ghép trait:
 
 - Con nào đeo kính che mắt (Shades, Holo Shades, 3D Glasses, Neon Visor) thì không có trait Eyes.
+- Bộ lông không bao giờ trùng màu với nền (ví dụ Mint không đứng trên nền Mint).
 - Các kiểu mắt nổi bật (Laser, Cyclops, Third Eye, Hearts, Stars, KO) không bao giờ bị kính che.
 - Mỗi bộ lông tránh những trait sẽ bị chìm vào nó, ví dụ Gold không đeo dây chuyền vàng và Void không đeo kính đen.
 - Không có hai Purrl nào trùng toàn bộ trait.
@@ -75,8 +68,8 @@ Hạng độ hiếm được tính theo kiểu rarity.tools: điểm là tổng 
 | | |
 |---|---|
 | Seed | `0x50555252` ("PURR") |
-| Provenance hash | `f5cf9fab815ffedc1fa7babcc8c0a5b9036aaa7dd66179c2755086260f0f9833` |
-| SHA-256 của mosaic | `1b0535953ac2729f366b902850c6eaf5d110b8ac8ffe6e76f7af7c6a22e05815` |
+| Provenance hash | `272611547decdd421e482e707540c6686e20503489377978b7728e3ed72c8e1b` |
+| SHA-256 của mosaic | `c69fa25470ca79104cfe4cc20eb84c976e4de9c77686167c233457d7da871a58` |
 
 Provenance hash là `sha256` của chuỗi nối các `sha256` dạng hex của từng Purrl, theo thứ tự #0 → #9999. Mỗi `sha256` được tính trên 2.304 byte RGBA thô (24×24×4) của Purrl đó. Hash mosaic được tính trên pixel RGBA của `dist/purrls.png` (2400×2400, 100 con mỗi hàng). Vì băm trên pixel chứ không băm byte PNG, kết quả không phụ thuộc phiên bản zlib. Trang gallery có nút xác minh, bấm vào sẽ dựng lại cả 10.000 con ngay trong trình duyệt và so với hai hash này.
 

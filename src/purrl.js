@@ -1,12 +1,9 @@
 // CryptoPurrls — 10,000 generative 24×24 pixel cats grown from the Purrl logo.
 //
 // Every Purrl shares the exact silhouette of the logo: a 14×14 block head with
-// a tall left ear, a shorter right ear and a notched chin. On top of it sits a
-// small lighting model: every pixel of the cat has a material (fur, stripe,
-// cloth…) and a tone (lit, base, shade, deep), and each material expands into a
-// four-tone ramp whose shadows drift cool and whose highlights drift warm. The
-// cat casts a shadow on a dithered background, picks up rim light from it, and
-// particles float both behind and in front of it.
+// a tall left ear, a shorter right ear and a notched chin. The look is flat and
+// graphic: one solid background colour, a crisp ink outline, and a cat drawn in
+// two tones (base and shade) per material, so all the colour lives on the cat.
 //
 // The whole collection is reproducible from SEED, so anyone can regenerate it
 // and check it against the provenance hash. Plain ES module with no
@@ -58,13 +55,8 @@ const cells = (test) => {
 const HEAD_CELLS = cells(inHead);
 const CAT_CELLS = cells(inCat);
 const OUTLINE_CELLS = cells(inOutline);
-// The cat casts its shadow 2px right and 1px down.
-const SHADOW_CELLS = cells((x, y) => !solid(x, y) && solid(x - 2, y - 1));
 // One pixel beyond the outline, for glows.
 const HALO_CELLS = cells((x, y) => !solid(x, y) && (inOutline(x - 1, y) || inOutline(x + 1, y) || inOutline(x, y - 1) || inOutline(x, y + 1)));
-// Edges that catch rim light: lit from the left/top, and from behind on the right.
-const RIM_L = cells((x, y) => inCat(x, y) && (!inCat(x - 1, y) || !inCat(x, y - 1)));
-const RIM_R = cells((x, y) => inCat(x, y) && !inCat(x + 1, y));
 
 // Light comes from the upper left. H lit, B base, S shade, D deep (occlusion).
 const TONE_MAP = {
@@ -91,6 +83,9 @@ const TONE_MAP = {
 };
 const TONE = new Int8Array(SIZE * SIZE).fill(-1);
 for (const [y, row] of Object.entries(TONE_MAP)) [...row].forEach((c, x) => { if (c !== '.') TONE[y * SIZE + x] = 'HBSD'.indexOf(c); });
+
+// Flat look: lit pixels use the base colour, occluded ones the single shade.
+const FLAT_TONE = [1, 1, 2, 2];
 
 // ---------------------------------------------------------------------------
 // Colour
@@ -169,9 +164,6 @@ function gradient(stops, t, x, y) {
   const f = clamp01((v - i - 0.5) * 3 + 0.5);
   return f > (BAYER[(y & 3) * 4 + (x & 3)] + 0.5) / 16 ? stops[i + 1] : stops[i];
 }
-const vertical = (stops) => (x, y) => gradient(stops, y / (SIZE - 1), x, y);
-const diagonal = (stops) => (x, y) => gradient(stops, (x + y) / (2 * SIZE - 2), x, y);
-const radial = (stops, cx = 11.5, cy = 9) => (x, y) => gradient(stops, Math.hypot(x - cx, y - cy) / 17, x, y);
 
 // ---------------------------------------------------------------------------
 // Canvas
@@ -222,86 +214,27 @@ class Grid {
 // ---------------------------------------------------------------------------
 // Backgrounds
 
+// One flat colour each, like a trading card: the cat carries all the colour.
+const flat = (c) => ({ paint: () => c });
 const BACKGROUNDS = [
-  ['Sunset', 12, { paint: vertical(['#47297f', '#9a3a98', '#f2577f', '#ff9563', '#ffd17a']), rim: ['#ffd17a', '#ff5fae'], shade: '#2b0f3f' }],
-  ['Lagoon', 11, { paint: vertical(['#0b3766', '#0e6a93', '#1aaeb3', '#73e6cd']), rim: ['#b0fff1', '#3d7dff'], shade: '#05213d' }],
-  ['Vaporwave', 10, { paint: diagonal(['#ff71ce', '#c06bff', '#7b8cff', '#01cdfe']), rim: ['#ffb3ec', '#01cdfe'], shade: '#3a1a6b' }],
-  ['Bubblegum', 10, { paint: radial(['#ffe6f3', '#ffb8dc', '#ff86c3', '#e5579f']), rim: ['#ffffff', '#ff4fa3'], shade: '#8a1f5c' }],
-  ['Citrus', 10, { paint: radial(['#fffbd6', '#ffe26b', '#ffb443', '#ff7b30']), rim: ['#fff7b8', '#ff6a2f'], shade: '#9a3a12' }],
-  ['Mint Soda', 9, { paint: radial(['#f2fff9', '#b8f6de', '#71e1c2', '#2fb7a1']), rim: ['#ffffff', '#1fa38f'], shade: '#0f5c55' }],
-  ['Lavender', 9, { paint: radial(['#f7f1ff', '#d9c8ff', '#ab8dff', '#7a5cf0']), rim: ['#ffffff', '#6f4dff'], shade: '#3a2585' }],
-  ['Purrl Blue', 8, { paint: vertical(['#b3cbdd', '#8eafc7', '#6f8fa6', '#557489']), rim: ['#e6f4ff', '#3d6f99'], shade: '#24384a' }],
-  ['Aurora', 6, { paint: aurora, rim: ['#7cf5b0', '#b072ff'], shade: '#020611' }],
-  ['Ember', 6, { paint: vertical(['#14050b', '#3e0c19', '#8c1c1f', '#df4520', '#ffa43a']), rim: ['#ffb347', '#ff3d2e'], shade: '#0a0205' }],
-  ['Toxic', 5, { paint: radial(['#dbff73', '#93e03b', '#3f9a1e', '#163d0c']), rim: ['#efff9a', '#3dff6a'], shade: '#0a2006' }],
-  ['Starfield', 4, { paint: starfield, rim: ['#a8d8ff', '#c08bff'], shade: '#010214' }],
-  ['Synthwave', 3, { paint: synthwave, rim: ['#ff6ad5', '#4fe3ff'], shade: '#0a0320' }],
-  ['Prism', 2, { paint: prism, rim: ['#ffffff', '#ff5fd2'], shade: '#3a2a6b' }],
-  ['Matrix', 2, { paint: matrix, rim: ['#8dffa8', '#1fbf4a'], shade: '#000000' }],
-  ['Void', 1, { paint: radial(['#24164a', '#120c26', '#07050f', '#000000'], 11.5, 11), rim: ['#9b7bff', '#ff4fd8'], shade: '#000000' }],
+  ['Bubblegum', 10, flat('#ff9fcf')],
+  ['Tangerine', 10, flat('#ffa04d')],
+  ['Lemon', 10, flat('#ffe35c')],
+  ['Lime', 9, flat('#a8e65f')],
+  ['Mint', 9, flat('#70dfc1')],
+  ['Sky', 10, flat('#6fc5ff')],
+  ['Periwinkle', 9, flat('#8e9cff')],
+  ['Lavender', 9, flat('#c4a0ff')],
+  ['Coral', 8, flat('#ff7470')],
+  ['Peach', 8, flat('#ffc9a1')],
+  ['Purrl Blue', 6, flat('#6f8fa6')],
+  ['Cloud', 6, flat('#ecebf3')],
+  ['Gold', 1, flat('#e8bb3c')],
+  ['Night', 1, flat('#1d1b2e')],
 ];
 
-function aurora(x, y, s) {
-  const sky = gradient(['#03081a', '#081a38', '#0f3354', '#15506a'], y / 23, x, y);
-  const a = 5 + 2.6 * Math.sin(x * 0.42 + (s % 7)), b = 9 + 2 * Math.sin(x * 0.31 + 2 + (s % 5));
-  if (Math.abs(y - a) < 1.6) return gradient(['#2ce6a0', '#9dffd0'], 1 - Math.abs(y - a) / 1.6, x, y);
-  if (Math.abs(y - b) < 1.1) return gradient(['#7a4dff', '#d18cff'], 1 - Math.abs(y - b) / 1.1, x, y);
-  return sky;
-}
-function starfield(x, y, s) {
-  const r = hash(x, y, s);
-  if (r < 0.018) return '#ffffff';
-  if (r < 0.05) return '#7f86d6';
-  // Two near stars with cross-shaped flares, placed per Purrl.
-  for (let k = 0; k < 2; k++) {
-    const sx = Math.floor(hash(k, 1, s) * 24), sy = Math.floor(hash(k, 2, s) * 10);
-    const d = Math.abs(x - sx) + Math.abs(y - sy);
-    if (d === 0) return '#ffffff';
-    if (d === 1 && (x === sx || y === sy)) return '#bcd7ff';
-  }
-  return gradient(['#03041a', '#0b1040', '#1c1a5c', '#2d1f6e'], y / 23, x, y);
-}
-function synthwave(x, y) {
-  // Horizon at y 10: the sun rises behind the head, the grid floor runs out to the sides.
-  if (y >= 10) {
-    const dy = y - 9, col = (x - 11.5) / (dy * 1.4);
-    if ([10, 11, 13, 16, 20].includes(y) || Math.abs(col - Math.round(col)) < 0.36 / dy + 0.06) return y === 10 ? '#ff9be9' : '#ff3ec8';
-    return gradient(['#2a0a4a', '#12052a'], (y - 10) / 13, x, y);
-  }
-  const d = Math.hypot(x - 11.5, y - 9.5);
-  if (d < 8 && !(y >= 6 && y % 2 === 1)) return gradient(['#fff27a', '#ffb13c', '#ff4f7f'], (y - 2) / 8, x, y);
-  return gradient(['#12062e', '#3c1470', '#a1308f'], y / 9, x, y);
-}
-function prism(x, y) {
-  const stops = ['#ff6b8b', '#ffb36b', '#ffe66b', '#7bf0a0', '#6bc8ff', '#a98bff', '#ff6bd6', '#ff6b8b'];
-  return gradient(stops, (((x + y * 0.7) / 30) % 1 + 1) % 1, x, y);
-}
-function matrix(x, y, s) {
-  if (hash(x, 0, s) < 0.55) {
-    const head = Math.floor(hash(x, 1, s) * 30) - 3, d = head - y;
-    if (d >= 0 && d < 7 && hash(x, y, s + 3) < 0.75) return d === 0 ? '#e3ffe8' : d < 3 ? '#3dff6a' : '#127a33';
-  }
-  return y % 2 ? '#020a04' : '#03100a';
-}
-
-// Backgrounds that ignore the seed are painted once and reused.
-const SEEDED = new Set([aurora, starfield, matrix]);
-const BG_CACHE = new Map();
 function paintBackground(g, bg) {
-  const key = SEEDED.has(bg.paint) ? null : bg;
-  if (key && BG_CACHE.has(key)) {
-    g.px = BG_CACHE.get(key).slice();
-    return;
-  }
-  for (let y = 0; y < SIZE; y++)
-    for (let x = 0; x < SIZE; x++) {
-      let c = bg.paint(x, y, g.seed);
-      // Soft vignette pulls the corners back.
-      const d = Math.hypot(x - 11.5, y - 11) / 16.3;
-      if (d > 0.72) c = mix(c, bg.shade, Math.round((d - 0.72) * 1.4 * 10) / 10);
-      g.set(x, y, c);
-    }
-  if (key) BG_CACHE.set(key, g.px.slice());
+  g.rect(0, 0, SIZE, SIZE, bg.paint());
 }
 
 // ---------------------------------------------------------------------------
@@ -786,42 +719,6 @@ const EARRINGS = [
   ['Diamond Stud', 1, (g) => { g.glow(19, 8, '#bff6ff', 0.3); g.sprite(19, 7, ['d', 'D'], { d: WHITE, D: '#8fdcf2' }); }],
 ];
 
-// --- Aura: particles in two depth planes, scattered per Purrl -----------------------------
-
-const AURAS = [
-  ['None', 48],
-  ['Sparkles', 10, { n: 7, back: (g, x, y) => g.set(x, y, '#fff6c2'), front: (g, x, y) => g.sprite(x - 1, y - 1, ['.s.', 'sWs', '.s.'], { s: ['blend', '#fff6c2', 0.6], W: WHITE }) }],
-  ['Embers', 6, { n: 9, back: (g, x, y) => g.set(x, y, '#ff8a1f'), front: (g, x, y) => g.sprite(x, y, ['y', 'o', 'r'], { y: '#ffe36b', o: '#ff8a1f', r: ['blend', '#e8283c', 0.5] }) }],
-  ['Bubbles', 7, { n: 6, back: (g, x, y) => g.blend(x, y, '#bff6ff', 0.6), front: (g, x, y) => g.sprite(x - 1, y - 1, ['.b.', 'bwb', '.b.'], { b: ['blend', '#bff6ff', 0.75], w: ['blend', WHITE, 0.3] }) }],
-  ['Snow', 6, { n: 12, back: (g, x, y) => g.blend(x, y, WHITE, 0.55), front: (g, x, y) => g.sprite(x, y, ['ww', 'ww'], { w: WHITE }) }],
-  ['Fireflies', 6, { n: 7, back: (g, x, y) => g.blend(x, y, '#e8ff7a', 0.6), front: (g, x, y) => { g.glow(x, y, '#d9ff4a', 0.35); g.set(x, y, '#f6ffc2'); } }],
-  ['Hearts', 5, { n: 6, back: (g, x, y) => g.set(x, y, '#ff7ab8'), front: (g, x, y) => g.sprite(x - 1, y - 1, ['h.h', 'hHh', '.h.'], { h: '#ff3d8b', H: '#ff9cc6' }) }],
-  ['Petals', 5, { n: 8, back: (g, x, y) => g.set(x, y, '#ffc2dc'), front: (g, x, y) => g.sprite(x, y, ['p.', 'Pp'], { p: '#ffc2dc', P: '#ff8fbd' }) }],
-  ['Glitch', 3, { n: 6, back: (g, x, y, r) => g.rect(x, y, 2 + Math.floor(r * 4), 1, r < 0.5 ? '#ff2a6d' : '#2af5ff'), front: (g, x, y, r) => g.rect(x, y, 3 + Math.floor(r * 5), 1, r < 0.5 ? '#ff2a6d' : '#2af5ff') }],
-  ['Orbs', 3, { n: 4, back: (g, x, y) => g.blend(x, y, '#c08bff', 0.6), front: (g, x, y) => { g.glow(x, y, '#c08bff', 0.4); g.sprite(x - 1, y - 1, ['.o.', 'oWo', '.o.'], { o: '#c08bff', W: '#f3e6ff' }); } }],
-  ['Lightning', 2, { n: 0, bolt: true }],
-];
-
-function scatter(rand, n) {
-  const out = [];
-  for (let i = 0; i < n * 4 && out.length < n; i++) {
-    const x = Math.floor(rand() * SIZE), y = Math.floor(rand() * 19), front = rand() < 0.4, r = rand();
-    if (front && x > 4 && x < 19 && y > 2) continue; // keep the face clear
-    out.push({ x, y, front, r });
-  }
-  return out;
-}
-function lightning(g, seed) {
-  const left = hash(1, 1, seed) < 0.5, x0 = left ? 2 : 20;
-  let x = x0;
-  for (let y = 0; y < 14; y++) {
-    g.glow(x, y, '#bfe6ff', 0.25);
-    g.set(x, y, '#ffffff');
-    if (y % 3 === 2) x += left ? 1 : -1;
-    if (y % 5 === 4) x -= left ? 2 : -2;
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Generation
 
@@ -852,20 +749,20 @@ const TABLES = {
   Headwear: byName(HEADWEAR),
   Outfit: byName(OUTFITS),
   Earring: byName(EARRINGS),
-  Aura: byName(AURAS),
 };
 
-export const TRAIT_TYPES = ['Fur', 'Background', 'Eyes', 'Mouth', 'Eyewear', 'Headwear', 'Outfit', 'Earring', 'Aura'];
+export const TRAIT_TYPES = ['Fur', 'Background', 'Eyes', 'Mouth', 'Eyewear', 'Headwear', 'Outfit', 'Earring'];
 
 // Purrl #0 is the logo itself, extruded into a prism.
 export const GENESIS = { id: 0, Fur: 'Genesis', Background: 'Ink' };
 
 // Traits that would vanish into a fur of the same colour.
 const CLASHES = {
-  Gold: ['Gold Chain', 'Gold Hoop', 'Gold Grill', 'Citrus'],
-  Void: ['Shades', 'Void', 'Matrix'],
-  Chrome: ['Armor'],
-  Neon: ['Neon Visor'],
+  Gold: ['Gold Chain', 'Gold Hoop', 'Gold Grill', 'Gold', 'Lemon', 'Tangerine'],
+  Void: ['Shades', 'Void', 'Night'],
+  Midnight: ['Night'], Tuxedo: ['Night'], Neon: ['Night', 'Neon Visor'], Cosmic: ['Night'], Lava: ['Night'],
+  Bubblegum: ['Bubblegum'], Mint: ['Mint'], Lilac: ['Lavender', 'Periwinkle'], Ginger: ['Tangerine'], Tiger: ['Tangerine'],
+  Cream: ['Cloud'], Moo: ['Cloud'], Pearl: ['Cloud'], Calico: ['Cloud'], Chrome: ['Armor', 'Cloud'], Smoke: ['Purrl Blue'],
 };
 
 function roll(rand, fur) {
@@ -887,7 +784,6 @@ function roll(rand, fur) {
   // Headphones, the eye patch strap and the cyber eye cover the right ear.
   const earBusy = ['Headphones', 'Devil Horns'].includes(t.Headwear) || ['Eye Patch', 'Cyber Eye'].includes(t.Eyewear);
   t.Earring = earBusy ? 'None' : draw(EARRINGS)[0];
-  t.Aura = draw(AURAS)[0];
   return t;
 }
 
@@ -923,8 +819,7 @@ export const STAGES = ['Logo', 'Silhouette', 'Light', 'Face', 'Traits'];
 
 // Genesis: the logo extruded three pixels deep through a prism, on ink.
 function genesis(g) {
-  for (let y = 0; y < SIZE; y++)
-    for (let x = 0; x < SIZE; x++) g.set(x, y, gradient(['#211a4d', '#15112f', '#0d0c18', INK], Math.hypot(x - 12, y - 11) / 15, x, y));
+  g.rect(0, 0, SIZE, SIZE, INK);
   const prismStops = ['#ff5fa2', '#ffb36b', '#ffe66b', '#6bf0a8', '#4fc3ff', '#a98bff'];
   for (let depth = 3; depth >= 1; depth--)
     for (const [x, y] of HEAD_CELLS) {
@@ -950,14 +845,9 @@ export function renderGrid(t, stage = STAGES.length - 1) {
   const traits = stage >= 4;
   paintBackground(g, bg);
 
-  // Back plane: far particles, the cast shadow (or a glow for Void), far half of a hat.
-  const aura = traits && option('Aura')[2];
-  const particles = aura?.n ? scatter(mulberry32(g.seed * 2654435761 + 7), aura.n) : [];
-  if (aura) for (const p of particles) if (!p.front) aura.back(g, p.x, p.y, p.r);
-  if (aura?.bolt) lightning(g, g.seed);
+  // Back plane: Void's glow and the far half of a hat.
   if (stage >= 2) {
     if (fur.glow) for (const [x, y] of HALO_CELLS) g.blend(x, y, fur.glow, 0.45);
-    else for (const [x, y] of SHADOW_CELLS) g.blend(x, y, bg.shade, 0.5);
   }
   if (traits) option('Headwear')[3]?.back?.(g);
 
@@ -984,16 +874,12 @@ export function renderGrid(t, stage = STAGES.length - 1) {
     }
   }
   for (const [x, y] of CAT_CELLS) {
-    const i = y * SIZE + x, k = mat[i];
+    const i = y * SIZE + x, k = mat[i], tone = FLAT_TONE[TONE[i]];
     if (stage < 2) g.set(x, y, fur.base);
-    else if (k === 'fur' && fur.paint) g.set(x, y, fur.paint(x, y, TONE[i], g.seed, under[i]));
-    else g.set(x, y, ramps[k][TONE[i]]);
+    else if (k === 'fur' && fur.paint) g.set(x, y, fur.paint(x, y, tone, g.seed, under[i]));
+    else g.set(x, y, ramps[k][tone]);
   }
-  g.outlineColor = fur.outline ?? mix(ramps.fur[3], '#07050d', 0.6);
-  if (stage >= 2 && !fur.glow) {
-    for (const [x, y] of RIM_L) g.blend(x, y, bg.rim[0], 0.3);
-    for (const [x, y] of RIM_R) g.blend(x, y, bg.rim[1], 0.45);
-  }
+  g.outlineColor = fur.outline ?? INK;
   for (const [x, y] of OUTLINE_CELLS) g.set(x, y, g.outlineColor);
   if (stage >= 2) whiskers(g);
 
@@ -1012,7 +898,6 @@ export function renderGrid(t, stage = STAGES.length - 1) {
     option('Earring')[2]?.(g);
     option('Eyewear')[2]?.(g);
     option('Headwear')[2]?.(g);
-    if (aura) for (const p of particles) if (p.front) aura.front(g, p.x, p.y, p.r);
   }
   if (stage >= 2) fur.post?.(g);
   return g.px;
@@ -1048,7 +933,7 @@ export const LEGENDARY = ['Genesis', ...Object.values(FURS).filter((f) => f.supp
 
 // --- Rarity ------------------------------------------------------------------
 
-const ACCESSORIES = ['Eyewear', 'Headwear', 'Outfit', 'Earring', 'Aura'];
+const ACCESSORIES = ['Eyewear', 'Headwear', 'Outfit', 'Earring'];
 export const accessoryCount = (t) => ACCESSORIES.filter((k) => t[k] && t[k] !== 'None').length;
 
 // Trait counts and a rarity.tools style rank: the score sums SUPPLY / count for
