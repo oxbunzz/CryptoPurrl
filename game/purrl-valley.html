@@ -38,7 +38,7 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 18px; margin: 0; 
 .chip.purr b { color: #b06d0e; }
 .chip.usdt b { color: #24745f; }
 
-.stage { position: relative; height: min(80vh, 860px); min-height: 460px; border: 3px solid var(--ink); box-shadow: 5px 5px 0 var(--ink); background: #a8d8f0; overflow: hidden; }
+.stage { position: relative; height: min(80vh, 860px); min-height: 460px; border: 3px solid var(--ink); box-shadow: 5px 5px 0 var(--ink); background: #9fd8f5; overflow: hidden; }
 canvas#map { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; cursor: grab; touch-action: none; }
 .float { position: absolute; top: 12px; left: 12px; width: min(320px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow: auto; z-index: 2; }
 .ctrl { position: absolute; top: 12px; right: 12px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; z-index: 2; max-width: 50%; }
@@ -175,8 +175,8 @@ function pendingNow(f, now = Date.now()) { return (f.pending || 0) + houseRate(f
 function clone(o) { return JSON.parse(JSON.stringify(o)); }
 function accrued(f) { const g = clone(f), now = Date.now(); g.pending = pendingNow(f, now); g.accrueAt = now; return g; }
 
-// ---------- World: voxel terrain in 3D (Three.js), square plots, orbit camera ----------
-const N = MAP_W, P = 7, WV = N * P + 1;            // N×N plots, each 6×6 blocks + 1-block road
+// ---------- World: cartoon suburb in 3D (toon shading + ink outlines), square lots, orbit camera ----------
+const N = MAP_W, LOT = 8, ROAD = 4, BLOCK = 2 * LOT + ROAD, WORLD = (N / 2) * BLOCK + ROAD;
 function hash(a, b, c = 0) { let h = (a * 374761393 + b * 668265263 + c * 2147483647) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
 function vnoise(x, y, s, seed) {
   const gx = x / s, gy = y / s, x0 = Math.floor(gx), y0 = Math.floor(gy), fx = gx - x0, fy = gy - y0;
@@ -184,186 +184,190 @@ function vnoise(x, y, s, seed) {
   const top = a + (b - a) * sm(fx), bot = c + (d - c) * sm(fx);
   return top + (bot - top) * sm(fy);
 }
-// plot kinds: 0 grass (for sale), 1 lake, 2 forest, 3 mountain, 4 town square
+// lot kinds: 0 lawn (for sale), 1 pond, 2 park, 3 woods (map edge), 4 town square
 const PK = new Uint8Array(N * N);
 const ter = (i, j) => (i < 0 || j < 0 || i >= N || j >= N ? 3 : PK[j * N + i]);
-const PLAZA = [Math.floor(N / 2) - 1, Math.floor(N / 2)];
+const PLAZA = [N / 2 - 2, N / 2 - 1];
 for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
   let k = 0;
   if (i === 0 || j === 0 || i === N - 1 || j === N - 1) k = 3;
   else if (PLAZA.includes(i) && PLAZA.includes(j)) k = 4;
-  else if (vnoise(i, j, 5, 11) < .27) k = 1;
-  else if (vnoise(i, j, 4, 23) > .7) k = 2;
+  else if (vnoise(i, j, 5, 11) < .25) k = 1;
+  else if (vnoise(i, j, 4, 23) > .72) k = 2;
   PK[j * N + i] = k;
 }
 const buyable = (i, j) => ter(i, j) === 0;
 let BUYABLE = 0; for (const k of PK) if (k === 0) BUYABLE++;
-const origin = (i, j) => [1 + i * P, 1 + j * P];      // first block of the plot
+const lotX0 = (i) => ROAD + Math.floor(i / 2) * BLOCK + (i % 2) * LOT;
+const lotCenter = (i, j) => [lotX0(i) + LOT / 2, lotX0(j) + LOT / 2];
+function lotIndex(v) { const r = v - ROAD, b = Math.floor(r / BLOCK), q = r - b * BLOCK; if (r < 0 || q >= 2 * LOT) return -1; const i = b * 2 + Math.floor(q / LOT); return i < N ? i : -1; }
 
 const stage = $('stage'), cv = $('map');
-let renderer = null, scene, camera, controls, groundPlane, selBox, hovBox, dynMeshes = [];
-let land3dReady = false;
+let renderer = null, scene, camera, controls, groundPlane, selBox, hovBox, dynGroup = null, land3dReady = false;
+let GRAD, OUTLINE;
+const matCache = {};
+const toon = (c) => matCache[c] || (matCache[c] = new THREE.MeshToonMaterial({ color: c, gradientMap: GRAD }));
+const G = {};                                  // shared geometries
+function inked(geo, color, ink = .07) {        // mesh + inverted-hull outline
+  const m = new THREE.Mesh(geo, toon(color));
+  if (ink) {
+    geo.computeBoundingBox(); const s = new THREE.Vector3(); geo.boundingBox.getSize(s);
+    const o = new THREE.Mesh(geo, OUTLINE); o.scale.set(1 + ink * 2 / Math.max(s.x, .2), 1 + ink * 2 / Math.max(s.y, .2), 1 + ink * 2 / Math.max(s.z, .2)); m.add(o);
+  }
+  return m;
+}
+function place(parent, m, x, y, z, ry = 0) { m.position.set(x, y, z); m.rotation.y = ry; parent.add(m); return m; }
+function boxG(w, h, d) { const k = w + 'x' + h + 'x' + d; return G[k] || (G[k] = new THREE.BoxGeometry(w, h, d)); }
+function gable(w, h, d) {                     // triangular roof prism, ridge along z
+  const k = 'gable' + w + h + d; if (G[k]) return G[k];
+  const s = new THREE.Shape(); s.moveTo(-w / 2, 0); s.lineTo(w / 2, 0); s.lineTo(0, h); s.lineTo(-w / 2, 0);
+  const g = new THREE.ExtrudeGeometry(s, { depth: d, bevelEnabled: false }); g.translate(0, 0, -d / 2); return (G[k] = g);
+}
+function instancedSet(geo, mat, mats, outline = 0) {
+  const m = new THREE.InstancedMesh(geo, mat, mats.length);
+  mats.forEach((mm, n) => m.setMatrixAt(n, mm)); m.instanceMatrix.needsUpdate = true; scene.add(m);
+  if (outline) {
+    const o = new THREE.InstancedMesh(geo, OUTLINE, mats.length), S = new THREE.Matrix4().makeScale(1 + outline, 1 + outline, 1 + outline);
+    mats.forEach((mm, n) => o.setMatrixAt(n, mm.clone().multiply(S))); o.instanceMatrix.needsUpdate = true; scene.add(o);
+  }
+  return m;
+}
+const M4 = (x, y, z, sx = 1, sy = 1, sz = 1, ry = 0) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry), new THREE.Vector3(sx, sy, sz));
 
-// pixel textures, generated once
-function mkTex(draw) {
-  const c = document.createElement('canvas'); c.width = c.height = 16; const g = c.getContext('2d'); draw(g);
-  const t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; return t;
-}
-const pick = (a) => a[Math.floor(Math.random() * a.length)];
-const fillN = (g, cols, y0 = 0, y1 = 16) => { for (let y = y0; y < y1; y++) for (let x = 0; x < 16; x++) { g.fillStyle = pick(cols); g.fillRect(x, y, 1, 1); } };
-const C = {
-  grass: ['#6fbf4a', '#5fae3e', '#7cc95a', '#68b845', '#5aa63a'],
-  dirt: ['#8a5a3a', '#7a4e32', '#97674a', '#6e452c'],
-  road: ['#a99e90', '#958a7c', '#b8ad9f', '#8a8072', '#c2b8aa'],
-  stone: ['#8f8f96', '#7d7d84', '#a0a0a8', '#86868d'],
-  snow: ['#ffffff', '#f2f6fa', '#e6eef6'],
-  sand: ['#e8d6a0', '#dcc88f', '#f1e2b4'],
-  water: ['#3f8fd8', '#4a9be2', '#3884cc', '#5aa6e8'],
-  leaves: ['#3f8a34', '#357a2c', '#4a9a3e', '#2c6a26', '#4f9f40'],
-  cobble: ['#bdb6aa', '#aaa398', '#cfc8bc', '#9d968b'],
-  cream: ['#f4e9d0', '#efe2c4', '#f8efdc'],
-};
-function buildTextures() {
-  const T = {};
-  T.grassTop = mkTex((g) => fillN(g, C.grass));
-  T.dirt = mkTex((g) => fillN(g, C.dirt));
-  T.grassSide = mkTex((g) => { fillN(g, C.dirt); fillN(g, C.grass, 0, 3); for (let x = 0; x < 16; x++) if (Math.random() < .45) { g.fillStyle = pick(C.grass); g.fillRect(x, 3, 1, 1 + (Math.random() < .3)); } });
-  T.road = mkTex((g) => fillN(g, C.road));
-  T.stone = mkTex((g) => { fillN(g, C.stone); g.fillStyle = '#6e6e75'; for (let i = 0; i < 5; i++) g.fillRect(Math.floor(Math.random() * 14), Math.floor(Math.random() * 15), 3, 1); });
-  T.snowTop = mkTex((g) => fillN(g, C.snow));
-  T.snowSide = mkTex((g) => { fillN(g, C.stone); fillN(g, C.snow, 0, 4); });
-  T.sand = mkTex((g) => fillN(g, C.sand));
-  T.water = mkTex((g) => { fillN(g, C.water); g.fillStyle = '#9ad0f4'; for (let i = 0; i < 4; i++) g.fillRect(Math.floor(Math.random() * 12), Math.floor(Math.random() * 16), 4, 1); });
-  T.leaves = mkTex((g) => { fillN(g, C.leaves); g.fillStyle = '#245a20'; for (let i = 0; i < 14; i++) g.fillRect(Math.floor(Math.random() * 16), Math.floor(Math.random() * 16), 1, 1); });
-  T.logSide = mkTex((g) => { for (let x = 0; x < 16; x++) for (let y = 0; y < 16; y++) { g.fillStyle = x % 4 === 0 ? '#4a2e1a' : pick(['#6b4428', '#5e3b22', '#74492c']); g.fillRect(x, y, 1, 1); } });
-  T.logTop = mkTex((g) => { for (let x = 0; x < 16; x++) for (let y = 0; y < 16; y++) { const r = Math.round(Math.hypot(x - 7.5, y - 7.5)); g.fillStyle = r > 6 ? '#5e3b22' : r % 2 ? '#c9a06a' : '#b08a58'; g.fillRect(x, y, 1, 1); } });
-  T.cobble = mkTex((g) => { fillN(g, C.cobble); g.fillStyle = '#8a8378'; for (let i = 0; i < 16; i += 4) { g.fillRect(0, i, 16, 1); g.fillRect((i * 3) % 16, i, 1, 4); g.fillRect((i * 3 + 8) % 16, i, 1, 4); } });
-  T.cream = mkTex((g) => fillN(g, C.cream));
-  T.plank = mkTex((g) => { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { g.fillStyle = y % 4 === 3 ? '#8a6238' : pick(['#c2945a', '#b98b52', '#c99c62']); g.fillRect(x, y, 1, 1); } g.fillStyle = '#8a6238'; g.fillRect(5, 0, 1, 3); g.fillRect(11, 4, 1, 3); g.fillRect(3, 8, 1, 3); g.fillRect(9, 12, 1, 3); });
-  T.farm = mkTex((g) => { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { g.fillStyle = y % 4 < 2 ? pick(['#5a3a22', '#4e321d']) : pick(['#6e4a2e', '#7a5434']); g.fillRect(x, y, 1, 1); } });
-  return T;
-}
-function mats(T) {
-  const L = (map, extra) => new THREE.MeshLambertMaterial({ map, ...extra });
-  const side = (s, top, bot) => [L(s), L(s), L(top), L(bot), L(s), L(s)];
-  return {
-    grass: side(T.grassSide, T.grassTop, T.dirt), dirt: L(T.dirt), road: L(T.road), stone: L(T.stone),
-    snow: side(T.snowSide, T.snowTop, T.stone), sand: L(T.sand), water: L(T.water, { transparent: true, opacity: .86 }),
-    leaves: L(T.leaves), log: side(T.logSide, T.logTop, T.logTop), cobble: L(T.cobble), cream: L(T.cream),
-    plank: L(T.plank), farm: L(T.farm),
-  };
-}
-const box = () => new THREE.BoxGeometry(1, 1, 1);
-let MAT = null;
-function instanced(type, list, scaleY = 1, offY = 0) {
-  const n = list.length / 3; if (!n) return null;
-  const m = new THREE.InstancedMesh(box(), MAT[type], n), o = new THREE.Object3D();
-  for (let i = 0; i < n; i++) { o.position.set(list[i * 3], list[i * 3 + 1] + offY, list[i * 3 + 2]); o.scale.set(1, scaleY, 1); o.updateMatrix(); m.setMatrixAt(i, o.matrix); }
-  m.instanceMatrix.needsUpdate = true; scene.add(m); return m;
-}
+// ---- static town ----
 function buildStatic() {
-  const B = {}; const add = (t, x, y, z) => (B[t] || (B[t] = [])).push(x, y, z);
-  const inPlot = (v) => v % P !== 0;
-  for (let z = 0; z < WV; z++) for (let x = 0; x < WV; x++) {
-    const i = Math.min(N - 1, Math.floor((x - 1) / P)), j = Math.min(N - 1, Math.floor((z - 1) / P));
-    const onPlot = inPlot(x) && inPlot(z) && x > 0 && z > 0;
-    const k = ter(Math.max(0, i), Math.max(0, j));
-    const plaza = PLAZA.includes(i) && PLAZA.includes(j) && x >= 1 + PLAZA[0] * P && x <= 6 + PLAZA[1] * P && z >= 1 + PLAZA[0] * P && z <= 6 + PLAZA[1] * P;
-    if (plaza) { add('cobble', x, 1, z); continue; }
-    if (!onPlot) {
-      const nearWater = ter(i, j) === 1 || ter(Math.floor(x / P) - (x % P === 0 ? 1 : 0), j) === 1;
-      add(k === 3 && (x === 0 || z === 0 || x === WV - 1 || z === WV - 1) ? 'stone' : nearWater && k === 1 ? 'sand' : 'road', x, 0, z); continue;
+  // ground beyond the town, then asphalt under the whole town
+  const far = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1600), toon('#86cf5c')); far.rotation.x = -Math.PI / 2; far.position.set(WORLD / 2, -.05, WORLD / 2); scene.add(far);
+  const asph = new THREE.Mesh(new THREE.PlaneGeometry(WORLD, WORLD), toon('#5b6070')); asph.rotation.x = -Math.PI / 2; asph.position.set(WORLD / 2, 0, WORLD / 2); scene.add(asph);
+  // yellow dashed centre lines
+  const dash = [];
+  for (let r = 0; r <= N / 2; r++) { const c = r * BLOCK + ROAD / 2; for (let t = 1.5; t < WORLD; t += 3) { dash.push(M4(c, .02, t, .18, .02, 1.4)); dash.push(M4(t, .02, c, 1.4, .02, .18)); } }
+  instancedSet(boxG(1, 1, 1), toon('#ffd23f'), dash);
+  // sidewalks: one concrete slab per block, lawns sit on top with a visible seam between lots
+  const walks = [], lawns = [];
+  for (let b = 0; b < N / 2; b++) for (let a = 0; a < N / 2; a++) {
+    const x = ROAD + a * BLOCK + LOT, z = ROAD + b * BLOCK + LOT;
+    walks.push(M4(x, .08, z, 2 * LOT + 1.4, .16, 2 * LOT + 1.4));
+  }
+  instancedSet(boxG(1, 1, 1), toon('#e4ddd0'), walks);
+  const plazaLot = (i, j) => ter(i, j) === 4;
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) if (!plazaLot(i, j)) { const [x, z] = lotCenter(i, j); lawns.push(M4(x, .24, z, LOT - .5, .2, LOT - .5)); }
+  instancedSet(boxG(1, 1, 1), toon('#86c95a'), lawns);
+  // trees in parks and woods, ponds, for-sale signs
+  const trunks = [], crowns = [], bushes = [], posts = [], boards = [], stripes = [];
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const k = ter(i, j), [cx0, cz0] = lotCenter(i, j);
+    if (k === 2 || k === 3) {
+      const spots = k === 3 ? [[-2.2, -2.2], [2, -1.8], [-1.6, 2.2], [2.3, 2], [0, 0]] : [[-2, -1.6], [2, 1.4], [-1.2, 2.4]];
+      spots.forEach(([a, b], n) => {
+        const x = cx0 + a + (hash(i, j, n) - .5), z = cz0 + b + (hash(j, i, n) - .5), s = .9 + hash(i, j, n + 9) * .5;
+        trunks.push(M4(x, .35 + 1.1 * s, z, s, s, s)); crowns.push(M4(x, .35 + 2.9 * s, z, s * 1.05, s, s * 1.05));
+      });
+      if (k === 2) [[2, -2.4], [-2.6, .4]].forEach(([a, b]) => bushes.push(M4(cx0 + a, .55, cz0 + b, 1, .75, 1)));
+    } else if (k === 1) {
+      const pond = place(scene, inked(G.pondRim || (G.pondRim = new THREE.CylinderGeometry(3.4, 3.5, .18, 28)), '#e8d6a0', .04), cx0, .38, cz0);
+      place(scene, new THREE.Mesh(G.pond || (G.pond = new THREE.CylinderGeometry(3, 3, .2, 28)), toon('#5ec8f0')), cx0, .42, cz0);
+      [[1, .8], [-1.3, -.6], [.2, -1.6]].forEach(([a, b]) => place(scene, new THREE.Mesh(G.lily || (G.lily = new THREE.CylinderGeometry(.35, .35, .05, 10)), toon('#4f9a44')), cx0 + a, .54, cz0 + b));
+      void pond;
+    } else if (k === 0) {
+      const sx = cx0 + 2.6, sz = cz0 + 3.1;
+      posts.push(M4(sx, 1, sz, 1, 1, 1)); boards.push(M4(sx, 1.55, sz + .06, 1, 1, 1)); stripes.push(M4(sx, 1.85, sz + .1, 1, 1, 1));
     }
-    if (k === 1) { add('water', x, 0, z); continue; }
-    if (k === 3) {
-      const h = 2 + Math.floor(vnoise(x, z, 7, 5) * 5 + vnoise(x, z, 3, 6) * 2);
-      for (let y = 1; y <= h; y++) add(y === h && h >= 6 ? 'snow' : y === h ? 'grass' : 'stone', x, y, z);
-      continue;
-    }
-    add('grass', x, 1, z);
   }
-  // sandy shore inside lake plots
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) if (ter(i, j) === 1) {
-    const [ox, oz] = origin(i, j);
-    for (let a = 0; a < 6; a++) for (let b = 0; b < 6; b++) if ((a === 0 || b === 0 || a === 5 || b === 5) && hash(ox + a, oz + b, 8) < .35) add('sand', ox + a, 0.02, oz + b);
-  }
-  // forests
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) if (ter(i, j) === 2) {
-    const [ox, oz] = origin(i, j);
-    [[1, 1], [4, 2], [2, 4], [4, 5]].forEach(([a, b], n) => {
-      if (n === 3 && hash(i, j, 9) < .5) return;
-      const tx = ox + a, tz = oz + b, h = 3 + Math.floor(hash(tx, tz, 3) * 2);
-      for (let y = 2; y < 2 + h; y++) add('log', tx, y, tz);
-      for (let dy = h; dy <= h + 2; dy++) { const r = dy === h + 2 ? 0 : 1; for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) if (!(dx === 0 && dz === 0 && dy < h + 1)) add('leaves', tx + dx, 1 + dy, tz + dz); }
-    });
-  }
-  // fountain and the Purrl statue in the square
-  const c0 = 1 + PLAZA[0] * P, cx0 = c0 + 6.5, cz0 = c0 + 6.5;
-  for (let a = -3; a <= 3; a++) for (let b = -3; b <= 3; b++) {
-    const r = Math.max(Math.abs(a), Math.abs(b)), X = Math.round(cx0 - .5 + a), Z = Math.round(cz0 - .5 + b);
-    if (r === 3) add('stone', X, 2, Z); else add('water', X, 1.6, Z);
-  }
-  const LOGO = ['##....', '##..##', '######', '######', '######', '.####.'];
-  LOGO.forEach((row, r) => [...row].forEach((ch, q) => { if (ch === '#') for (let d = 0; d < 2; d++) add('cream', Math.round(cx0 - 3.5) + q, 2 + (LOGO.length - r), Math.round(cz0 - 1) + d); }));
-  for (const t of Object.keys(B)) instanced(t, B[t], t === 'water' ? .8 : 1, t === 'water' ? -.1 : 0);
+  const trunkG = new THREE.CylinderGeometry(.22, .3, 2.2, 8), crownG = new THREE.SphereGeometry(1.5, 14, 10), bushG = new THREE.SphereGeometry(.9, 12, 8);
+  instancedSet(trunkG, toon('#8a5a3c'), trunks, .12); instancedSet(crownG, toon('#4fb04a'), crowns, .06); instancedSet(bushG, toon('#3f9a3e'), bushes, .1);
+  instancedSet(boxG(.14, 1.3, .14), toon('#8a5a3c'), posts); instancedSet(boxG(1.3, .7, .08), toon('#ffffff'), boards, .08); instancedSet(boxG(1.3, .16, .1), toon('#e8504f'), stripes);
+  // town square: paving, fountain, Purrl statue
+  const p0 = lotX0(PLAZA[0]), pc = p0 + LOT;
+  place(scene, inked(boxG(2 * LOT - .5, .2, 2 * LOT - .5), '#e9cfa0', 0), pc, .24, pc);
+  place(scene, inked(new THREE.CylinderGeometry(4, 4.2, .7, 32), '#c9c2b6', .05), pc, .6, pc);
+  place(scene, new THREE.Mesh(new THREE.CylinderGeometry(3.6, 3.6, .5, 32), toon('#5ec8f0')), pc, .75, pc);
+  place(scene, inked(new THREE.CylinderGeometry(.9, 1.1, 1.2, 16), '#c9c2b6', .05), pc, 1.4, pc);
+  const logo = new THREE.Shape();
+  [[1, 0], [13, 0], [13, 1], [14, 1], [14, 13], [11, 13], [11, 11], [3, 11], [3, 14], [0, 14], [0, 1], [1, 1]].forEach(([x, y], n) => (n ? logo.lineTo : logo.moveTo).call(logo, x * .26 - 1.82, y * .26));
+  const lg = new THREE.ExtrudeGeometry(logo, { depth: .8, bevelEnabled: true, bevelThickness: .08, bevelSize: .06, bevelSegments: 2 }); lg.translate(0, 0, -.4);
+  const statue = place(scene, inked(lg, '#f4e9d0', .05), pc, 2, pc);
+  place(statue, new THREE.Mesh(boxG(.3, .5, .1), toon('#2b2433')), -.2, 1.7, .5); place(statue, new THREE.Mesh(boxG(.3, .5, .1), toon('#2b2433')), .9, 1.7, .5);
+  [[-5.5, -5.5], [5.5, -5.5], [-5.5, 5.5], [5.5, 5.5]].forEach(([a, b]) => { place(scene, inked(G.bed || (G.bed = new THREE.CylinderGeometry(1.4, 1.4, .5, 16)), '#a8724c', .06), pc + a, .55, pc + b); place(scene, inked(bushG, '#ff8fc8', .08), pc + a, 1, pc + b); });
+  // distant hills
+  for (let n = 0; n < 18; n++) { const a = n / 18 * Math.PI * 2, r = WORLD * .75 + hash(n, 3) * 40; place(scene, new THREE.Mesh(new THREE.SphereGeometry(30 + hash(n, 4) * 25, 16, 10), toon(n % 2 ? '#7cc45a' : '#6db84e')), WORLD / 2 + Math.cos(a) * r, -12, WORLD / 2 + Math.sin(a) * r); }
 }
-// dynamic layer: owned plots, houses, crops
-const ROOFS = [null, '#a8724c', '#d6455a', '#7a4ad6'];
+
+// ---- owned lots: fences, mailboxes, houses, gardens ----
+const WALLS = ['#f6c1c9', '#ffe39a', '#bfe3f7', '#c9f2c0', '#f7d6b0', '#e2d1f7'];
+const ROOFC = ['#e8504f', '#3f7fd8', '#8a5a3c', '#f28a3c', '#7a4ad6'];
+function house(level, k) {
+  const g = new THREE.Group(), wall = WALLS[Math.floor(hash(k.length, k.charCodeAt(0) * 31 + k.charCodeAt(k.length - 1), 2) * 6)], roof = ROOFC[Math.floor(hash(k.charCodeAt(0), k.length * 7, 5) * 5)];
+  const W = level === 1 ? 3.8 : level === 2 ? 4.4 : 5, D = level === 1 ? 3.2 : 3.8, H = level === 1 ? 2.4 : 4.2;
+  place(g, inked(boxG(W, H, D), wall), 0, H / 2, 0);
+  place(g, inked(gable(W + .7, level === 1 ? 1.6 : 1.9, D + .7), roof, .06), 0, H, 0, Math.PI / 2 * 0);
+  place(g, inked(boxG(.6, 1.3, .6), '#c4573f'), W / 2 - .8, H + 1.1, -D / 4);                                       // chimney
+  place(g, inked(boxG(.9, 1.5, .1), '#8a5a3c', .04), 0, .75, D / 2 + .05);                                          // door
+  place(g, new THREE.Mesh(boxG(.12, .12, .08), toon('#ffd23f')), .28, .75, D / 2 + .12);
+  place(g, inked(boxG(1.2, .25, .5), '#d8d2c6', .04), 0, .12, D / 2 + .35);                                         // step
+  const win = (x, y, z, ry = 0) => { const w = place(g, inked(boxG(.95, .85, .08), '#ffffff', .04), x, y, z, ry); place(w, new THREE.Mesh(boxG(.7, .62, .1), toon('#9ad6f2')), 0, 0, 0); place(w, new THREE.Mesh(boxG(.06, .62, .12), toon('#ffffff')), 0, 0, 0); };
+  win(-W / 2 + .9, 1.4, D / 2 + .05); win(W / 2 - .9, 1.4, D / 2 + .05);
+  win(W / 2 + .05, 1.4, 0, Math.PI / 2); win(-W / 2 - .05, 1.4, 0, Math.PI / 2);
+  if (level >= 2) { win(-W / 2 + .9, 3.1, D / 2 + .05); win(W / 2 - .9, 3.1, D / 2 + .05); win(0, 3.1, D / 2 + .05); }
+  if (level === 3) {
+    place(g, inked(boxG(W + .4, .15, 1.4), roof, .05), 0, 2.25, D / 2 + .7);                                         // porch roof
+    [-W / 2, W / 2].forEach((x) => place(g, inked(boxG(.18, 2.2, .18), '#ffffff', .04), x, 1.1, D / 2 + 1.3));
+    place(g, inked(boxG(2.4, 2, 3), wall), W / 2 + 1.3, 1, -.2);                                                    // garage
+    place(g, inked(boxG(1.8, 1.4, .08), '#ffffff', .04), W / 2 + 1.3, .7, 1.33);
+    place(g, inked(gable(2.8, .9, 3.4), roof, .06), W / 2 + 1.3, 2, -.2);
+  }
+  return g;
+}
+function fence(group, cx0, cz0, color) {
+  const pickets = [], h = LOT / 2 - .35;
+  for (let t = -h; t <= h + .01; t += .5) {
+    pickets.push([cx0 + t, cz0 - h], [cx0 - h, cz0 + t], [cx0 + h, cz0 + t]);
+    if (Math.abs(t) > 1.1) pickets.push([cx0 + t, cz0 + h]);                                                     // gate gap at the front
+  }
+  const pm = new THREE.InstancedMesh(G.picket || (G.picket = new THREE.BoxGeometry(.16, .9, .08)), toon('#ffffff'), pickets.length);
+  pickets.forEach(([x, z], n) => pm.setMatrixAt(n, M4(x, .8, z)));
+  group.add(pm);
+  [[0, -h, LOT - .7, 0], [-h, 0, LOT - .7, Math.PI / 2], [h, 0, LOT - .7, Math.PI / 2], [-h + 1.3, h, 2.4, 0], [h - 1.3, h, 2.4, 0]].forEach(([a, b, len, ry]) => place(group, new THREE.Mesh(boxG(len, .1, .06), toon(color)), cx0 + a, .95, cz0 + b, ry));
+  // mailbox in the owner's colour
+  place(group, inked(boxG(.12, .9, .12), '#8a5a3c', .03), cx0 + 1.6, .8, cz0 + h + .4);
+  place(group, inked(boxG(.45, .35, .6), color, .04), cx0 + 1.6, 1.35, cz0 + h + .4);
+}
+function garden(group, cx0, cz0, p, now) {
+  const c = CROPS[p.crop], t = (now - p.plantedAt) / c.grow;
+  for (const dz of [-1.8, 0, 1.8]) {
+    place(group, inked(boxG(5.2, .3, 1.2), '#8a5a3c', .04), cx0, .48, cz0 + dz);
+    place(group, new THREE.Mesh(boxG(4.9, .1, .95), toon('#5a3a22')), cx0, .65, cz0 + dz);
+    for (const dx of [-1.8, -.6, .6, 1.8]) {
+      const x = cx0 + dx, z = cz0 + dz;
+      if (t < .25) place(group, new THREE.Mesh(boxG(.15, .1, .15), toon('#3a2a1a')), x, .75, z);
+      else if (t < .6) place(group, new THREE.Mesh(G.sprout || (G.sprout = new THREE.SphereGeometry(.18, 8, 6)), toon('#7cc95a')), x, .85, z);
+      else if (t < 1) place(group, inked(G.leaf || (G.leaf = new THREE.SphereGeometry(.32, 10, 8)), '#3f9a3e', .05), x, .95, z);
+      else if (p.crop === 'carrot') { place(group, inked(G.cone || (G.cone = new THREE.ConeGeometry(.2, .5, 8)), '#ff8a1f', .05), x, .8, z).rotation.x = Math.PI; place(group, new THREE.Mesh(G.sprout || (G.sprout = new THREE.SphereGeometry(.18, 8, 6)), toon('#4fb04a')), x, 1.15, z); }
+      else if (p.crop === 'tomato') { place(group, inked(G.leaf, '#3f9a3e', .05), x, .95, z); place(group, inked(G.fruit || (G.fruit = new THREE.SphereGeometry(.17, 10, 8)), '#e8344f', .05), x + .15, 1.1, z + .2); }
+      else { const pk = place(group, inked(G.pump || (G.pump = new THREE.SphereGeometry(.42, 12, 8)), '#f28a1f', .05), x, .95, z); pk.scale.y = .75; place(group, new THREE.Mesh(boxG(.06, .2, .06), toon('#3f8a3a')), x, 1.35, z); }
+    }
+  }
+}
 function buildDynamic() {
-  for (const m of dynMeshes) { scene.remove(m); m.geometry.dispose(); }
-  dynMeshes = [];
-  const col = [], plank = [], farm = [];
-  const cbox = (x, y, z, sx, sy, sz, c) => col.push([x, y, z, sx, sy, sz, c]);
+  if (dynGroup) scene.remove(dynGroup);
+  dynGroup = new THREE.Group(); scene.add(dynGroup);
   const now = Date.now();
   for (const [k, l] of Object.entries(land)) {
     const [i, j] = k.split('_').map(Number); if (!buyable(i, j)) continue;
-    const [ox, oz] = origin(i, j), owner = l.owner === me ? '#f2a93b' : (colors[l.owner] || '#8a7a9a');
-    // fence: corner posts and rails in the owner's colour
-    for (let a = 0; a < 6; a++) {
-      cbox(ox + a, 1.62, oz - .42, 1, .12, .12, owner); cbox(ox + a, 1.62, oz + 5.42, 1, .12, .12, owner);
-      cbox(ox - .42, 1.62, oz + a, .12, .12, 1, owner); cbox(ox + 5.42, 1.62, oz + a, .12, .12, 1, owner);
-    }
-    [[-.42, -.42], [5.42, -.42], [-.42, 5.42], [5.42, 5.42], [2.5, -.42], [2.5, 5.42], [-.42, 2.5], [5.42, 2.5]].forEach(([a, b]) => cbox(ox + a, 1.85, oz + b, .2, .7, .2, '#4a3220'));
+    const [cx0, cz0] = lotCenter(i, j), color = l.owner === me ? '#f2a93b' : (colors[l.owner] || '#8a7a9a');
+    fence(dynGroup, cx0, cz0, color);
     const f = farms[l.owner], p = f && f.plots && f.plots[k];
-    if (!p) continue;
-    if (p.kind === 'house') {
-      const lv = p.level, wallH = lv === 3 ? 6 : lv === 2 ? 4 : 3, x0 = ox + 1, z0 = oz + 1;
-      for (let y = 2; y < 2 + wallH; y++) for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) plank.push(x0 + a, y, z0 + b);
-      cbox(x0 + 1.5, 2.5, z0 + 3.53, .9, 2, .08, '#6a4428');                         // door, front (+z)
-      for (let y of lv === 3 ? [3, 6] : [3]) { cbox(x0 - .03, y, z0 + 1.5, .08, .8, 1.4, '#9ad6f2'); cbox(x0 + 3.03, y, z0 + 1.5, .08, .8, 1.4, '#9ad6f2'); cbox(x0 + .5, y + (lv === 3 && y === 6 ? 0 : 1), z0 + 3.53, .7, .7, .08, '#9ad6f2'); }
-      const ry = 2 + wallH, roof = ROOFS[lv];
-      for (let s = 0; s < 3; s++) { const w = 6 - s * 2; cbox(x0 + 1.5, ry + s * .6, z0 + 1.5, w, .6, w, s % 2 ? roof : shadeHex(roof)); }
-      if (lv >= 2) { for (let y = ry - 1; y < ry + 2; y++) cbox(x0 + 3, y, z0, 1, 1, 1, '#7d7d84'); }
-      if (lv === 3) { cbox(x0 + 1.5, ry + 2.4, z0 + 1.5, .12, 1.6, .12, '#4a3220'); cbox(x0 + 1.95, ry + 2.9, z0 + 1.5, .8, .5, .08, '#ffd23f'); }
-    } else if (p.kind === 'crop') {
-      const c = CROPS[p.crop], t = (now - p.plantedAt) / c.grow;
-      for (let a = 1; a <= 4; a++) for (let b = 1; b <= 4; b++) {
-        farm.push(ox + a, 1.52, oz + b);
-        const X = ox + a, Z = oz + b;
-        if (t < .25) cbox(X, 1.62, Z, .2, .1, .2, '#6b4a2a');
-        else if (t < .6) cbox(X, 1.75, Z, .25, .35, .25, '#5fae3e');
-        else if (t < 1) cbox(X, 1.85, Z, .45, .55, .45, '#3f8a3a');
-        else {
-          if (p.crop === 'carrot') { cbox(X, 1.68, Z, .42, .3, .42, '#ff8a1f'); cbox(X, 2.02, Z, .22, .4, .22, '#3f8a3a'); continue; }
-          cbox(X, 1.85, Z, .4, .55, .4, '#3f8a3a');
-          if (p.crop === 'tomato') cbox(X, 2.2, Z, .32, .32, .32, '#e8344f');
-          if (p.crop === 'pumpkin') cbox(X, 1.85, Z, .7, .55, .7, '#f28a1f');
-        }
-      }
-    }
+    if (p && p.kind === 'house') place(dynGroup, house(p.level, k), cx0, .34, cz0 - .6);
+    else if (p && p.kind === 'crop') garden(dynGroup, cx0, cz0, p, now);
   }
-  const o = new THREE.Object3D();
-  if (col.length) {
-    const m = new THREE.InstancedMesh(box(), new THREE.MeshLambertMaterial({ color: 0xffffff }), col.length), c = new THREE.Color();
-    col.forEach(([x, y, z, sx, sy, sz, hex], n) => { o.position.set(x, y, z); o.scale.set(sx, sy, sz); o.updateMatrix(); m.setMatrixAt(n, o.matrix); m.setColorAt(n, c.set(hex)); });
-    m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; scene.add(m); dynMeshes.push(m);
-  }
-  if (plank.length) dynMeshes.push(instanced('plank', plank));
-  if (farm.length) dynMeshes.push(instanced('farm', farm, .06, 0));
-  dynMeshes = dynMeshes.filter(Boolean);
-  drawMini();
+  hideSigns(); drawMini();
 }
-function shadeHex(h) { const n = parseInt(h.slice(1), 16), f = (v) => Math.round(v * .82); return '#' + [f(n >> 16), f((n >> 8) & 255), f(n & 255)].map((v) => v.toString(16).padStart(2, '0')).join(''); }
+let signMeshes = [];
+function hideSigns() {                        // sold lots lose their for-sale sign
+  if (!signMeshes.length) signMeshes = scene.children.filter((m) => m.isInstancedMesh && m.count && m.userData.sign);
+  const hidden = new THREE.Matrix4().makeScale(0, 0, 0);
+  for (const m of signMeshes) { m.userData.base.forEach((mm, n) => m.setMatrixAt(n, land[m.userData.keys[n]] ? hidden : mm)); m.instanceMatrix.needsUpdate = true; }
+}
 function cropSig() {
   const now = Date.now(); let s = '';
   for (const [k, l] of Object.entries(land)) { const p = farms[l.owner] && farms[l.owner].plots && farms[l.owner].plots[k]; if (p && p.kind === 'crop') { const t = (now - p.plantedAt) / CROPS[p.crop].grow; s += k + (t < .25 ? 0 : t < .6 ? 1 : t < 1 ? 2 : 3); } }
@@ -374,41 +378,40 @@ function redrawLand() { if (land3dReady) { buildDynamic(); lastSig = cropSig(); 
 function redrawCrops() { if (!land3dReady) return; const s = cropSig(); if (s !== lastSig) { lastSig = s; buildDynamic(); } }
 function draw() { redrawLand(); }
 
-// minimap (2D, one cell per plot)
+// ---- minimap ----
 const mm = $('mini'), mx = mm.getContext('2d');
-const MINI_COL = ['#7cc95a', '#3f8fd8', '#2f6a2a', '#9a9aa0', '#cfc8bc'];
+const MINI_COL = ['#8fd65a', '#5ec8f0', '#3f9a3e', '#2f7a36', '#e9cfa0'];
 function drawMini() {
-  const s = mm.width / N; mx.fillStyle = '#a99e90'; mx.fillRect(0, 0, mm.width, mm.height);
+  const s = mm.width / WORLD; mx.fillStyle = '#5b6070'; mx.fillRect(0, 0, mm.width, mm.height);
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
     const l = land[key(i, j)];
-    mx.fillStyle = l ? (l.owner === me ? '#f2a93b' : '#8a5a3c') : MINI_COL[ter(i, j)];
-    mx.fillRect(i * s + .5, j * s + .5, s - 1, s - 1);
+    mx.fillStyle = l ? (l.owner === me ? '#f2a93b' : '#e8504f') : MINI_COL[ter(i, j)];
+    mx.fillRect(lotX0(i) * s + .5, lotX0(j) * s + .5, LOT * s - 1, LOT * s - 1);
   }
 }
 function drawMiniView() {
   if (!controls) return;
   drawMini();
-  const s = mm.width / WV, t = controls.target, d = camera.position.distanceTo(t), r = Math.max(4, d * .55 * s);
-  mx.strokeStyle = '#ffffff'; mx.lineWidth = 2; mx.beginPath(); mx.arc((t.x + .5) * s, (t.z + .5) * s, r, 0, 7); mx.stroke();
+  const s = mm.width / WORLD, t = controls.target, d = camera.position.distanceTo(t), r = Math.max(4, d * .5 * s);
+  mx.strokeStyle = '#ffffff'; mx.lineWidth = 2; mx.beginPath(); mx.arc(t.x * s, t.z * s, r, 0, 7); mx.stroke();
   const dir = new THREE.Vector3().subVectors(t, camera.position).setY(0).normalize();
-  mx.beginPath(); mx.moveTo((t.x + .5) * s, (t.z + .5) * s); mx.lineTo((t.x + .5) * s + dir.x * r, (t.z + .5) * s + dir.z * r); mx.stroke();
+  mx.beginPath(); mx.moveTo(t.x * s, t.z * s); mx.lineTo(t.x * s + dir.x * r, t.z * s + dir.z * r); mx.stroke();
 }
-let miniDirty = 0;
-function miniJump(e) { const r = mm.getBoundingClientRect(); flyTo((e.clientX - r.left) / r.width * WV, (e.clientY - r.top) / r.height * WV); }
+let miniTick = 0;
+function miniJump(e) { const r = mm.getBoundingClientRect(); flyTo((e.clientX - r.left) / r.width * WORLD, (e.clientY - r.top) / r.height * WORLD); }
 mm.addEventListener('pointerdown', (e) => { e.stopPropagation(); mm.setPointerCapture(e.pointerId); miniJump(e); });
 mm.addEventListener('pointermove', (e) => { if (e.buttons) miniJump(e); });
 
-// camera fly-to
+// ---- camera ----
 let fly = null;
 function flyTo(x, z, dist) {
   if (!controls) return;
-  const off = new THREE.Vector3().subVectors(camera.position, controls.target);
-  if (dist) off.setLength(dist);
-  fly = { t0: performance.now(), from: controls.target.clone(), to: new THREE.Vector3(x, 1, z), offFrom: new THREE.Vector3().subVectors(camera.position, controls.target), offTo: off };
+  const off = new THREE.Vector3().subVectors(camera.position, controls.target); if (dist) off.setLength(dist);
+  fly = { t0: performance.now(), from: controls.target.clone(), to: new THREE.Vector3(x, .4, z), offFrom: new THREE.Vector3().subVectors(camera.position, controls.target), offTo: off };
 }
 function clampTarget() {
   const t = controls.target, before = t.clone();
-  t.x = Math.min(WV - 1, Math.max(0, t.x)); t.z = Math.min(WV - 1, Math.max(0, t.z)); t.y = 1;
+  t.x = Math.min(WORLD, Math.max(0, t.x)); t.z = Math.min(WORLD, Math.max(0, t.z)); t.y = .4;
   camera.position.add(t.clone().sub(before));
 }
 const keys = new Set();
@@ -424,55 +427,53 @@ window.addEventListener('keydown', (e) => {
 });
 window.addEventListener('keyup', (e) => keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key));
 window.addEventListener('blur', () => keys.clear());
-function dolly(f) { if (!controls) return; const off = camera.position.clone().sub(controls.target); off.multiplyScalar(f); const L = off.length(); if (L < controls.minDistance || L > controls.maxDistance) return; camera.position.copy(controls.target).add(off); }
+function dolly(f) { if (!controls) return; const off = camera.position.clone().sub(controls.target).multiplyScalar(f), L = off.length(); if (L < controls.minDistance || L > controls.maxDistance) return; camera.position.copy(controls.target).add(off); }
 function orbit(a) { const off = camera.position.clone().sub(controls.target); off.applyAxisAngle(new THREE.Vector3(0, 1, 0), a); camera.position.copy(controls.target).add(off); }
-
 function plotAt(clientX, clientY) {
   const r = cv.getBoundingClientRect(), v = new THREE.Vector2((clientX - r.left) / r.width * 2 - 1, -(clientY - r.top) / r.height * 2 + 1);
   const ray = new THREE.Raycaster(); ray.setFromCamera(v, camera);
   const hit = new THREE.Vector3(); if (!ray.ray.intersectPlane(groundPlane, hit)) return null;
-  const vx = Math.round(hit.x), vz = Math.round(hit.z);
-  if (vx % P === 0 || vz % P === 0) return null;
-  const i = Math.floor((vx - 1) / P), j = Math.floor((vz - 1) / P);
-  return i >= 0 && j >= 0 && i < N && j < N ? key(i, j) : null;
+  const i = lotIndex(hit.x), j = lotIndex(hit.z);
+  return i >= 0 && j >= 0 ? key(i, j) : null;
 }
-function placeBox(b, k) {
-  if (!k) { b.visible = false; return; }
-  const [i, j] = k.split('_').map(Number), [ox, oz] = origin(i, j); b.visible = true; b.position.set(ox + 2.5, 1.6, oz + 2.5);
-}
+function placeBox(b, k) { if (!k) { b.visible = false; return; } const [i, j] = k.split('_').map(Number), [x, z] = lotCenter(i, j); b.visible = true; b.position.set(x, .6, z); }
+let hover = null;
 function init3d() {
   if (!window.THREE || !THREE.OrbitControls) { stage.insertAdjacentHTML('beforeend', '<p class="banner" style="position:absolute;inset:auto 12px 12px 12px;z-index:3">Không tải được thư viện 3D. Kiểm tra kết nối mạng rồi tải lại trang.</p>'); return; }
-  MAT = mats(buildTextures());
+  GRAD = new THREE.DataTexture(new Uint8Array([110, 110, 110, 255, 185, 185, 185, 255, 255, 255, 255, 255]), 3, 1, THREE.RGBAFormat);
+  GRAD.magFilter = GRAD.minFilter = THREE.NearestFilter; GRAD.generateMipmaps = false; GRAD.needsUpdate = true;
+  OUTLINE = new THREE.MeshBasicMaterial({ color: 0x2b2433, side: THREE.BackSide });
   renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   scene = new THREE.Scene();
-  scene.background = new THREE.Color('#a8d8f0'); scene.fog = new THREE.Fog('#a8d8f0', 120, 260);
-  camera = new THREE.PerspectiveCamera(45, 1, .5, 600);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7a5a, .75));
-  const sun = new THREE.DirectionalLight(0xffffff, .65); sun.position.set(-60, 100, 40); scene.add(sun);
-  const sea = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.MeshLambertMaterial({ color: '#3f8fd8' }));
-  sea.rotation.x = -Math.PI / 2; sea.position.set(WV / 2, -.6, WV / 2); scene.add(sea);
+  scene.background = new THREE.Color('#9fd8f5'); scene.fog = new THREE.Fog('#9fd8f5', 180, 420);
+  camera = new THREE.PerspectiveCamera(42, 1, .5, 900);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xb8a888, .55));
+  const sun = new THREE.DirectionalLight(0xffffff, .75); sun.position.set(-80, 140, 60); scene.add(sun);
   buildStatic();
-  groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1.5);
-  const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(6.08, .5, 6.08));
+  // tag the for-sale sign meshes so sold lots can hide theirs
+  const signKeys = []; for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) if (ter(i, j) === 0) signKeys.push(key(i, j));
+  scene.children.filter((m) => m.isInstancedMesh && m.count === signKeys.length).forEach((m) => {
+    m.userData.sign = true; m.userData.keys = signKeys; m.userData.base = [];
+    for (let n = 0; n < m.count; n++) { const mm = new THREE.Matrix4(); m.getMatrixAt(n, mm); m.userData.base.push(mm); }
+  });
+  groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -.35);
+  const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(LOT - .3, .6, LOT - .3));
   selBox = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xffffff })); selBox.visible = false; scene.add(selBox);
-  hovBox = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xffe066, transparent: true, opacity: .8 })); hovBox.visible = false; scene.add(hovBox);
-  const c = WV / 2;
-  camera.position.set(c, 42, c + 48);
+  hovBox = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xffe066 })); hovBox.visible = false; scene.add(hovBox);
+  const c = WORLD / 2;
+  camera.position.set(c, 55, c + 62);
   controls = new THREE.OrbitControls(camera, cv);
-  controls.target.set(c, 1, c);
+  controls.target.set(c, .4, c);
   controls.enableDamping = true; controls.dampingFactor = .12;
-  controls.screenSpacePanning = false; controls.maxPolarAngle = 1.32; controls.minPolarAngle = .15;
-  controls.minDistance = 8; controls.maxDistance = 190;
+  controls.screenSpacePanning = false; controls.maxPolarAngle = 1.3; controls.minPolarAngle = .2;
+  controls.minDistance = 10; controls.maxDistance = 300;
   controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
   controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
   controls.update();
   let down = null;
   cv.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY, b: e.button }; });
-  cv.addEventListener('pointerup', (e) => {
-    if (down && down.b === 0 && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6) { sel = plotAt(e.clientX, e.clientY); renderPlot(); }
-    down = null;
-  });
+  cv.addEventListener('pointerup', (e) => { if (down && down.b === 0 && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6) { sel = plotAt(e.clientX, e.clientY); renderPlot(); } down = null; });
   cv.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') hover = plotAt(e.clientX, e.clientY); });
   cv.addEventListener('pointerleave', () => (hover = null));
   cv.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -483,7 +484,7 @@ function init3d() {
   const loop = (now) => {
     const dt = Math.min(.05, (now - last) / 1000); last = now;
     if (fly) {
-      const k = Math.min(1, (now - fly.t0) / 650), e = 1 - Math.pow(1 - k, 3);
+      const k = Math.min(1, (now - fly.t0) / 700), e = 1 - Math.pow(1 - k, 3);
       controls.target.lerpVectors(fly.from, fly.to, e);
       camera.position.copy(controls.target).add(new THREE.Vector3().lerpVectors(fly.offFrom, fly.offTo, e));
       if (k >= 1) fly = null;
@@ -501,22 +502,20 @@ function init3d() {
     controls.update(); clampTarget();
     placeBox(selBox, sel); placeBox(hovBox, hover && hover !== sel ? hover : null);
     selBox.material.color.set(Math.floor(now / 380) % 2 ? 0xffffff : 0x2b2433);
-    if (++miniDirty % 6 === 0) drawMiniView();
+    if (++miniTick % 6 === 0) drawMiniView();
     renderer.render(scene, camera);
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
 }
-let hover = null;
 $('zin').onclick = () => dolly(.75);
 $('zout').onclick = () => dolly(1.33);
 $('zrot').onclick = () => controls && orbit(Math.PI / 4);
-$('zall').onclick = () => flyTo(WV / 2, WV / 2, 175);
+$('zall').onclick = () => flyTo(WORLD / 2, WORLD / 2, 260);
 $('zhome').onclick = () => {
-  const mine = Object.entries(land).filter(([, l]) => l.owner === me).map(([k]) => k.split('_').map(Number));
-  if (!mine.length) { toast('Bạn chưa có đất. Về quảng trường trung tâm.'); flyTo(WV / 2, WV / 2, 50); return; }
-  const ai = mine.reduce((s, p) => s + p[0], 0) / mine.length, aj = mine.reduce((s, p) => s + p[1], 0) / mine.length;
-  flyTo(1 + ai * P + 2.5, 1 + aj * P + 2.5, 32);
+  const mine = Object.entries(land).filter(([, l]) => l.owner === me).map(([k]) => lotCenter(...k.split('_').map(Number)));
+  if (!mine.length) { toast('Bạn chưa có đất. Về quảng trường trung tâm.'); flyTo(WORLD / 2, WORLD / 2, 60); return; }
+  flyTo(mine.reduce((s, p) => s + p[0], 0) / mine.length, mine.reduce((s, p) => s + p[1], 0) / mine.length, 34);
 };
 drawMini();
 init3d();
@@ -542,12 +541,12 @@ function costText(c) { return `${c.wood} gỗ, ${c.stone} đá`; }
 function hasCost(f, c) { const i = f.inv || {}; return (i.wood || 0) >= c.wood && (i.stone || 0) >= c.stone; }
 function renderPlot() {
   const el = $('plot'), f = myFarm(), now = Date.now();
-  if (!sel) { el.innerHTML = `<h2>Ô đất</h2><p class="note">Bấm một ô đất cỏ trên bản đồ để xem, mua hoặc làm việc trên đó. Đã bán <b class="num">${soldCount()}</b>/${BUYABLE} ô đất.</p>`; return; }
+  if (!sel) { el.innerHTML = `<h2>Ô đất</h2><p class="note">Bấm một lô đất có biển bán trên bản đồ để xem, mua hoặc làm việc trên đó. Đã bán <b class="num">${soldCount()}</b>/${BUYABLE} ô đất.</p>`; return; }
   const [x, y] = sel.split('_').map(Number), l = land[sel];
   let h = `<h2>Ô đất ${x + 1}·${y + 1}</h2>`;
   if (!l && !buyable(x, y)) {
-    const T_NAMES = { 1: 'Hồ nước', 2: 'Rừng', 3: 'Núi đá', 4: 'Quảng trường' };
-    el.innerHTML = h + `<div class="kv"><span>Địa hình</span><b>${T_NAMES[ter(x, y)]}</b></div><p class="note">Khu vực chung, không bán. Chọn một ô cỏ xanh.</p>`; return;
+    const T_NAMES = { 1: 'Hồ nước', 2: 'Công viên', 3: 'Rừng cây', 4: 'Quảng trường' };
+    el.innerHTML = h + `<div class="kv"><span>Địa hình</span><b>${T_NAMES[ter(x, y)]}</b></div><p class="note">Khu vực chung, không bán. Chọn một lô có biển bán nhà.</p>`; return;
   }
   if (!l) {
     const pr = landPrice();
