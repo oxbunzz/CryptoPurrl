@@ -4,13 +4,14 @@
 // with a tall left horn, a shorter right horn and a notched chin. The look is
 // flat and graphic: one pale background colour, a crisp ink outline, and a body
 // drawn in two tones per material, so all the colour lives on the creature.
-// There are 20 Purrls and every trait value is worn by exactly one of them.
+// The bust is cropped like a CryptoPunk: head and neck on a 24×24 canvas, the
+// face turned to the right. There are 20 Purrls and every trait value is worn by exactly one of them.
 //
 // The whole collection is reproducible from SEED, so anyone can regenerate it
 // and check it against the provenance hash. Plain ES module with no
 // dependencies: the same file renders in Node and in the browser.
 
-export const SIZE = 32;
+export const SIZE = 24;
 export const SUPPLY = 20;
 export const SEED = 0x50555252; // "PURR"
 
@@ -22,7 +23,7 @@ const PUPIL = '#140c1f';
 // ---------------------------------------------------------------------------
 // Silhouette
 
-// The logo, one character per logo cell, placed 1:1 on the 32×32 canvas. The
+// The logo, one character per logo cell, placed 1:1 on the 24×24 canvas. The
 // head turns three-quarters to the right: the tall peak sits at the back, the
 // short one at the front, and a one-pixel snout pokes out of the face.
 const LOGO = [
@@ -32,24 +33,18 @@ const LOGO = [
   ...Array(10).fill('##############'),
   '.############.',
 ];
-const HEAD_X = 9, HEAD_Y = 7;
-const SNOUT = new Set([15 * 32 + 23, 16 * 32 + 23]);
+const HEAD_X = 6, HEAD_Y = 5;
+const SNOUT = new Set([13 * 24 + 20, 14 * 24 + 20]);
 
-// Neck and shoulders, centred under the head.
+// Punk-style bust: just a neck, set under the back of the head.
 const BODY = [
-  '............########............',
-  '............########............',
-  '...........##########...........',
-  '.........##############.........',
-  '.........##############.........',
-  '.......##################.......',
-  '.......##################.......',
-  '.......##################.......',
-  '.......##################.......',
-  '.......##################.......',
-  '.......##################.......',
+  '.........#######........',
+  '.........#######........',
+  '.........#######........',
+  '.........#######........',
+  '.........#######........',
 ];
-const BODY_Y = 21;
+const BODY_Y = 19;
 
 const inHead = (x, y) => LOGO[y - HEAD_Y]?.[x - HEAD_X] === '#' || SNOUT.has(y * SIZE + x);
 const inBody = (x, y) => BODY[y - BODY_Y]?.[x] === '#';
@@ -429,7 +424,7 @@ const EYES = [
   ['Laser', 1, (g) => {
     // The front eye fires a beam the way the creature faces; the back eye only glows.
     const [x, y] = EYE_R;
-    for (let bx = x + 2; bx < SIZE; bx++) {
+    for (let bx = x + 2; bx < SIZE + 9; bx++) {
       g.set(bx, y + 1, '#fff2b0');
       g.blend(bx, y, '#ff2a4a', 0.75);
       g.blend(bx, y + 2, '#ff2a4a', 0.75);
@@ -728,7 +723,7 @@ const OUTFITS = [
   }],
   ['Puffer', 4, { mat: { '#': '#3fc8ff' }, rows: 'body' }, (g) => g.abs(() => {
     for (const [x, y] of CAT_CELLS) if (y >= BODY_Y && (y - BODY_Y) % 2 === 1) g.blend(x, y, '#1a3f9a', 0.35);
-    g.rect(15, BODY_Y, 2, SIZE - BODY_Y, '#3a3a4a');
+    g.rect(12, BODY_Y, 1, SIZE - BODY_Y, '#3a3a4a');
   })],
   ['Tie-Dye', 1, (g) => g.abs(() => {
     const cs = ['#ff7ab8', '#ffd23f', '#3fc8ff', '#8f7bff'];
@@ -882,7 +877,7 @@ export function renderGrid(t, stage = STAGES.length - 1) {
   if (stage >= 2) {
     if (fur.glow) for (const [x, y] of HALO_CELLS) g.blend(x, y, fur.glow, 0.45);
   }
-  if (traits) g.at(4, 3, option('Headwear')[3]?.back);
+  if (traits) g.at(1, 1, option('Headwear')[3]?.back);
 
   // The body: materials resolved through the tone map.
   const under = g.px.slice();
@@ -893,7 +888,7 @@ export function renderGrid(t, stage = STAGES.length - 1) {
     set: (x, y, k) => { if (inCat(x, y)) mat[y * SIZE + x] = k; },
     // Pattern sprites are drawn for the reference head, so shift them like traits.
     sprite: (x, y, rows, keys, key) => rows.forEach((row, j) => [...row].forEach((ch, i) => {
-      if (ch !== '.' && ch !== ' ' && keys.includes(ch)) m.set(x + i + 4, y + j + 3, key ?? ch);
+      if (ch !== '.' && ch !== ' ' && keys.includes(ch)) m.set(x + i + 1, y + j + 1, key ?? ch);
     })),
   };
   for (const [x, y] of CAT_CELLS) mat[y * SIZE + x] = 'fur';
@@ -917,14 +912,18 @@ export function renderGrid(t, stage = STAGES.length - 1) {
   // Front plane.
   if (traits) {
     const outfit = option('Outfit');
-    g.at(4, 3, typeof outfit[2] === 'function' ? outfit[2] : outfit[3]);
+    // Neckwear is clipped to the neck and its outline.
+    const before = g.px.slice();
+    g.at(1, 1, typeof outfit[2] === 'function' ? outfit[2] : outfit[3]);
+    for (let i = 0; i < g.px.length; i++) if (!solid(i % SIZE, Math.floor(i / SIZE))) g.px[i] = before[i];
   }
   if (stage >= 3) {
-    option('Eyes')?.[2]?.(g);
-    g.at(8, 3, option('Mouth')[2]);
+    // Eye art is placed for a head at (9, 7).
+    g.at(-3, -2, option('Eyes')?.[2]);
+    g.at(5, 1, option('Mouth')[2]);
   }
   if (traits) {
-    g.at(4, 3, option('Headwear')[2]);
+    g.at(1, 1, option('Headwear')[2]);
   }
   if (stage >= 2) fur.post?.(g);
   return g.px;
