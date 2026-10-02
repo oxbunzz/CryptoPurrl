@@ -1,67 +1,69 @@
 # CryptoPurrls
 
-**20 sinh vật pixel 32×32 mọc ra từ một logo. Không có trait nào xuất hiện hai lần.**
+**20 sinh vật pixel 24×24 mọc ra từ một logo. Không có trait nào xuất hiện hai lần.**
 
 ![Toàn bộ 20 Purrl](dist/preview.png)
 
-Logo Purrl là một khối 14×14: đầu vuông, chỏm trái cao 3 ô, chỏm phải thấp 2 ô, cằm vát hai góc. Mỗi Purrl là một sinh vật **chibi kawaii**: cái đầu to chính là silhouette logo đặt 1:1 (bo nhẹ góc hai chỏm), thân bé xíu có tay và chân ngắn. Nhân vật đứng gọn giữa khung 32×32 và chừa lề xung quanh, nên khi X cắt ảnh đại diện thành hình tròn vẫn thấy trọn nhân vật.
+Logo Purrl là một khối 14×14: đầu vuông, chỏm trái cao 3 ô, chỏm phải thấp 2 ô, cằm vát hai góc. Mỗi Purrl là một sinh vật nhỏ trên khung 24×24: đầu là logo thu về 10×10 (vẫn đủ chỏm cao, chỏm thấp, khoảng trống giữa và cằm vát), thân bé xíu và hai chân chạm sát mép dưới ảnh.
 
 ```
-####..........      ← chỏm trái cao
-####......####      ← chỏm phải thấp; khoảng trống ở giữa là chỗ đội mũ
-####......####
-##############
-      ×10
-.############.      ← cằm vát
+###.......      ← chỏm trái cao
+###....###      ← chỏm phải thấp; khoảng trống ở giữa là chỗ đội mũ
+##########
+    ×7
+.########.      ← cằm vát
 ```
 
 ## Phong cách
 
-- Nền một màu phẳng sáng nhạt.
-- Đổ bóng ba tông mềm: một điểm sáng trên đầu, màu gốc, và bóng ở mép phải, dưới đầu và dưới chân.
-- Viền đậm cùng tông với thân thay cho viền đen.
-- Mắt to long lanh với điểm sáng, má hồng, miệng nhỏ. Trên các thân màu tối, nét mặt được vẽ bằng màu sáng để vẫn đọc được.
+Tối giản để dễ nhìn ở cỡ ảnh đại diện:
+- Thân một màu đơn sắc, chỉ có một tông bóng ở mép phải, dưới đầu và ở chân.
+- Viền đen rõ nét.
+- Mặt nhỏ gọn.
+- Nền một màu nhạt.
+
+Trên các thân màu tối, nét mặt được vẽ bằng màu sáng.
 
 ## Mọi trait đều 1/1
 
-Có 6 loại trait: Body, Background, Eyes, Mouth, Headwear, Outfit. Mỗi loại có một danh sách giá trị được xáo trộn theo seed rồi chia lần lượt cho từng con, nên **mỗi giá trị chỉ có đúng một con mang**. Kính được gộp vào trait Eyes. Nếu một nhân vật mang trait bị chìm vào màu thân (ví dụ thân Gold đội Medal vàng, hay thân Mint trên nền Mint), lần chia đó bị huỷ và chia lại.
+Có 6 loại trait: Body, Background, Eyes, Mouth, Headwear, Outfit. Mỗi loại có một danh sách giá trị được xáo trộn theo seed rồi chia lần lượt cho từng con, nên **mỗi giá trị chỉ có đúng một con mang**. Kính được gộp vào trait Eyes. Nếu màu thân quá gần màu nền hoặc màu áo, lần chia đó bị huỷ và chia lại.
 
 Purrl #0 **Genesis** chính là logo, được đùn sâu ba pixel xuyên qua một lăng kính, trên nền mực.
 
 | # | Body | Background | Eyes | Mouth | Headwear | Outfit |
 |---|---|---|---|---|---|---|
 | #0 | Genesis | Ink | — | — | — | — |
-| #1 | Pearl | Bubblegum | Ice | Lollipop | Brain Jar | Rune Robe |
-| #2 | Leopard | Mauve | Ruby | Gold Grill | Party Hat | Bow Tie |
-| #3 | Neon | Pearl | Holo Shades | Stitched | Crown | Gold Chain |
-| #4 | Rainbow | Lime | Monocle | Braces | Headphones | Tie-Dye |
-| #5 | Void | Tangerine | 3D Glasses | Buck Teeth | Devil Horns | Armor |
-| #6 | Cosmic | Gold | Amethyst | Mustache | Propeller Cap | Scarf |
-| #7 | Cream | Sky | Sleepy | Hiss | Bow | Kimono |
-| #8 | Bubblegum | Lemon | Stars | Zipper | Unicorn Horn | Hoodie |
-| #9 | Lilac | Coral | Wink | Pipe | Halo | Medal |
-| #10 | Crystal | Sand | Cyclops | Blep | Mushroom | Striped Sweater |
-| #11 | Mint | Butter | Neon Visor | Gasp | Crystal Shards | Jersey |
-| #12 | Moo | Sage | Void | Bubblegum | Bandana | Collar & Bell |
-| #13 | Chrome | Purrl Blue | Neon Glow | Tentacles | Orbit | Suit |
-| #14 | Zombie | Lavender | Shades | Kiss | Flame | Overalls |
-| #15 | Smoke | Periwinkle | Laser | Rainbow Tongue | Flower | Pearl Necklace |
-| #16 | Tiger | Cloud | Cyber Eye | Grin | Antenna | Lab Coat |
-| #17 | Gold | Aqua | Hearts | Fire Breath | Wizard Hat | Puffer |
-| #18 | Midnight | Mint | Odd Eyes | Diamond Grill | Top Hat | Astronaut |
-| #19 | Lava | Peach | Third Eye | Smile | Sprout | Cape |
+| #1 | Rose | Pearl | Cyclops | Tongue | Bow | Striped Shirt |
+| #2 | Lilac | Sand | Stars | Frown | Wizard Hat | Lab Coat |
+| #3 | Peach | Periwinkle | Round | Mustache | Devil Horns | Scarf |
+| #4 | Mustard | Lemon | Laser | Fang | Top Hat | Hoodie |
+| #5 | Mint | Aqua | Red | Grin | Antenna | Gold Chain |
+| #6 | Teal | Mauve | Shiny | Line | Crown | Medal |
+| #7 | Coral | Tangerine | Shades | Smile | Bandana | Suit |
+| #8 | Sky | Lavender | Happy | Bubblegum | Flower | Cape |
+| #9 | Tangerine | Coral | Green | Teeth | Headphones | Armor |
+| #10 | Lime | Cloud | Visor | Gold Tooth | Beanie | Bell Collar |
+| #11 | Ash | Mint | Hearts | O | Party Hat | Sweater |
+| #12 | Grape | Bubblegum | Blue | Smirk | Cap | Hawaiian |
+| #13 | Snow | Gold | Dots | Drool | Chef Hat | Puffer |
+| #14 | Midnight | Butter | KO | Kiss | Sprout | Astronaut |
+| #15 | Charcoal | Peach | Wide | Zipper | Unicorn Horn | Red Tee |
+| #16 | Mocha | Lime | Wink | Fish | Propeller Cap | Overalls |
+| #17 | Blush | Purrl Blue | Specs | Surprised | Mushroom | Bow Tie |
+| #18 | Cobalt | Sage | 3D Glasses | Lollipop | Cherries | Jersey |
+| #19 | Gold | Sky | Sleepy | Wavy | Halo | Kimono |
 
-Một số Body như Cosmic, Lava, Crystal, Leopard và Moo vẽ hoa văn theo số hiệu. Mỗi danh sách trait có từ 19 đến 20 giá trị; những giá trị chưa được chia sẽ dành cho các đợt sau.
+Mỗi danh sách trait có từ 19 đến 20 giá trị; những giá trị chưa được chia sẽ dành cho các đợt sau.
 
 ## Provenance
 
 | | |
 |---|---|
 | Seed | `0x50555252` ("PURR") |
-| Provenance hash | `2eaa1656821e6a7013625ca986ace5ad81e6d48368a76cb131587fa69285e41e` |
-| SHA-256 của mosaic | `8b673e1d13901fec19cddc19ea8873632c0baee5552355f23456452d0449bb7b` |
+| Provenance hash | `e2a9f7263e9fa9de742f3e70d587bb48132a3d0036eac809bd3f17045dce121c` |
+| SHA-256 của mosaic | `33ce49455ebf11e3e58a91cf47e130ca73c29c3b2e1f841793050c983bc6ed19` |
 
-Provenance hash là `sha256` của chuỗi nối các `sha256` dạng hex của từng Purrl, theo thứ tự #0 → #19. Mỗi `sha256` được tính trên 4.096 byte RGBA thô (32×32×4). Hash mosaic được tính trên pixel RGBA của `dist/purrls.png` (160×128, 5 con mỗi hàng). Trang gallery có nút xác minh, bấm vào sẽ dựng lại cả bộ ngay trong trình duyệt và so với hai hash này.
+Provenance hash là `sha256` của chuỗi nối các `sha256` dạng hex của từng Purrl, theo thứ tự #0 → #19. Mỗi `sha256` được tính trên 2.304 byte RGBA thô (24×24×4). Hash mosaic được tính trên pixel RGBA của `dist/purrls.png` (120×96, 5 con mỗi hàng). Trang gallery có nút xác minh, bấm vào sẽ dựng lại cả bộ ngay trong trình duyệt và so với hai hash này.
 
 ## Cách chạy
 
