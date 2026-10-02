@@ -36,6 +36,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   background: var(--ground);
   color: var(--ink);
@@ -220,7 +221,7 @@ td.type { color: var(--muted); }
     <section id="catalogue" aria-labelledby="catalogue-h">
       <div class="sec-head">
         <h2 id="catalogue-h">Bộ sưu tập</h2>
-        <p>Lọc theo trait, xếp theo độ hiếm, hoặc gõ số hiệu để mở thẳng một Purrl. Số trong ngoặc là số con mang trait đó.</p>
+        <p>Lọc theo trait hoặc gõ số hiệu để mở thẳng một Purrl. Mỗi giá trị trong bộ lọc chỉ khớp đúng một con.</p>
       </div>
       <form class="toolbar" id="filters" autocomplete="off"></form>
       <div class="result-bar">
