@@ -116,11 +116,9 @@ section { padding-block: clamp(48px, 8vw, 88px); border-bottom: 1px solid var(--
 .tier-label .pixel { font-size: 16px; display: flex; gap: 10px; align-items: baseline; }
 .tier-label .count { color: var(--gold); }
 .tier-label p { font-size: var(--step--1); color: var(--muted); }
-.tier-grid { display: grid; gap: 6px; }
+/* Column counts are picked per tier in script so every row fills. */
+.tier-grid { display: grid; gap: 6px; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); }
 .tier-grid.genesis { grid-template-columns: minmax(0, 160px); }
-.tier-grid.pearl { grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 10px; }
-.tier-grid.gold { grid-template-columns: repeat(12, minmax(0, 1fr)); }
-.tier-grid.zombie { grid-template-columns: repeat(22, minmax(0, 1fr)); gap: 4px; }
 .thumb { padding: 0; border: 0; background: none; cursor: pointer; display: block; }
 .thumb canvas { transition: transform 0.12s ease; }
 .thumb:hover canvas { transform: translate(-2px, -2px); box-shadow: 2px 2px 0 var(--ink); }
@@ -185,9 +183,7 @@ td.type { color: var(--muted); }
   .stats div:nth-child(n + 4) { border-top: 1px solid var(--rule); }
   .d-grid { grid-template-columns: minmax(0, 1fr); }
   .d-grid > canvas { max-width: 240px; }
-  .tier-grid.pearl { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .tier-grid.gold { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .tier-grid.zombie { grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 3px; }
+  .tier-grid { grid-template-columns: repeat(var(--cols-sm), minmax(0, 1fr)); gap: 4px; }
 }
 @media (max-width: 480px) {
   .stats dd { font-size: 24px; }
@@ -221,7 +217,7 @@ td.type { color: var(--muted); }
       <div class="pitch">
         <p class="eyebrow">Bộ sưu tập pixel 24×24</p>
         <h1>Một logo. Mười nghìn con mèo.</h1>
-        <p class="lede">Mỗi CryptoPurrl giữ nguyên silhouette của logo: đầu vuông 14×14, tai trái cao, tai phải thấp, cằm vát. Phần còn lại do một seed cố định quyết định, nên ai cũng dựng lại được đúng 10.000 con và đối chiếu với provenance hash.</p>
+        <p class="lede">Mỗi CryptoPurrl giữ nguyên silhouette của logo: đầu vuông 14×14, tai trái cao, tai phải thấp, cằm vát. Trên đó là ánh sáng bốn tông, bóng đổ xuống nền, viền sáng hắt màu từ môi trường và những hạt lơ lửng trước lẫn sau con mèo. Tất cả do một seed cố định quyết định, nên ai cũng dựng lại được đúng 10.000 con.</p>
         <div class="lot-card" aria-live="polite">
           <div class="lot-head">
             <span class="pixel" id="lot-id">#0</span>
@@ -242,7 +238,7 @@ td.type { color: var(--muted); }
     <section id="legendary" aria-labelledby="legendary-h">
       <div class="sec-head">
         <h2 id="legendary-h">Huyền thoại</h2>
-        <p>Bốn bộ lông có số lượng cố định, không phụ thuộc may rủi: 1 Genesis, 9 Pearl, 24 Gold và 88 Zombie. Mọi con còn lại được quay ngẫu nhiên theo trọng số.</p>
+        <p>Mười bộ lông có số lượng cố định, không phụ thuộc may rủi, từ 1 Genesis đến 111 Zombie. Cosmic, Lava, Crystal, Leopard và Moo vẽ hoa văn theo số hiệu, nên không có hai con nào giống nhau.</p>
       </div>
       <div class="tiers" id="tiers"></div>
     </section>
@@ -321,7 +317,7 @@ td.type { color: var(--muted); }
 </dialog>
 
 <script type="module">
-import { generateCollection, rarity, renderRGBA, attributes, SIZE, SUPPLY, STAGES, TRAIT_TYPES } from './purrl.js';
+import { generateCollection, rarity, renderRGBA, attributes, SIZE, SUPPLY, STAGES, TRAIT_TYPES, LEGENDARY } from './purrl.js';
 
 const $ = (s) => document.querySelector(s);
 const fmt = (n) => n.toLocaleString('vi-VN');
@@ -330,8 +326,7 @@ const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const all = generateCollection();
 const { counts, rank } = rarity(all);
-const LEGENDARY = ['Genesis', 'Pearl', 'Gold', 'Zombie'];
-const TYPE_VI = { Fur: 'Lông', Background: 'Nền', Eyes: 'Mắt', Mouth: 'Miệng', Eyewear: 'Kính', Headwear: 'Mũ', Outfit: 'Trang phục', Earring: 'Khuyên tai' };
+const TYPE_VI = { Fur: 'Lông', Background: 'Nền', Eyes: 'Mắt', Mouth: 'Miệng', Eyewear: 'Kính', Headwear: 'Mũ', Outfit: 'Trang phục', Earring: 'Khuyên tai', Aura: 'Hào quang' };
 const valueOf = (t, k) => t[k] ?? 'None';
 const label = (k, v) => (v === 'None' ? (k === 'Eyes' ? 'Bị che' : 'Không có') : v);
 const shownTypes = (t) => (t.Fur === 'Genesis' ? ['Fur', 'Background'] : TRAIT_TYPES);
@@ -357,7 +352,7 @@ function thumb(t, cls = 'thumb') {
 paint($('#brand-mark'), all[0]);
 
 // --- Stats ------------------------------------------------------------------
-$('#stats').innerHTML = [['Tổng cung', SUPPLY], ...LEGENDARY.map((f) => [f, counts.Fur[f]])]
+$('#stats').innerHTML = [['Tổng cung', SUPPLY], ...LEGENDARY.slice(0, 4).map((f) => [f, counts.Fur[f]])]
   .map(([k, v]) => `<div><dt>${k}</dt><dd>${fmt(v)}</dd></div>`).join('');
 
 // --- Hero lot viewer ----------------------------------------------------------
@@ -413,10 +408,22 @@ $('#lot-open').addEventListener('click', () => openDetail(heroId));
 
 // --- Legendary tiers ------------------------------------------------------------
 const TIER_NOTES = {
-  Genesis: 'Chính là logo: silhouette màu kem trên nền mực, không mặt, không phụ kiện. Purrl #0, gốc của cả bộ sưu tập.',
-  Pearl: 'Lông xà cừ với những dải hồng, tím, xanh chạy chéo. Hiếm nhất, và là nguồn gốc của cái tên Purrl.',
-  Gold: 'Lông vàng đánh bóng: viền sáng bên trái, vệt loé chéo trên trán. Không bao giờ đi cùng phụ kiện vàng.',
-  Zombie: 'Lông xanh rêu với đường khâu trên trán và trên ngực.',
+  Genesis: 'Chính là logo, đùn sâu ba pixel xuyên qua một lăng kính. Purrl #0, gốc của cả bộ sưu tập.',
+  Pearl: 'Lông xà cừ với những dải hồng, kem, xanh bạc hà chạy chéo. Hiếm nhất, và là nguồn gốc của cái tên Purrl.',
+  Void: 'Một hố đen hình con mèo. Chỉ còn đôi mắt, viền neon tím và quầng sáng hắt ra nền.',
+  Gold: 'Vàng đánh bóng với vệt loé chéo trên mặt. Không bao giờ đi cùng phụ kiện vàng.',
+  Cosmic: 'Một dải thiên hà nằm bên trong bộ lông. Tinh vân và vì sao xếp khác nhau ở từng con.',
+  Chrome: 'Kim loại lỏng phản chiếu đường chân trời: trời sáng ở trên, đất ấm ở dưới.',
+  Crystal: 'Pha lê trong suốt, nhìn xuyên qua thấy nền phía sau, mặt cắt khác nhau ở từng con.',
+  Lava: 'Đá bazan nứt toác, dung nham sáng rực trong các khe. Mỗi con một kiểu vết nứt.',
+  Glitch: 'Tín hiệu hỏng: viền tách màu RGB và vài dòng quét bị xé lệch.',
+  Zombie: 'Xanh rêu, vết khâu trên trán và ngực, một miếng da vá trên má.',
+};
+// The widest column count in [lo, hi] that leaves at most one gap in the last
+// row, else at most two.
+const bestCols = (n, lo, hi) => {
+  for (const slack of [1, 2]) for (let c = hi; c >= lo; c--) if ((c - (n % c)) % c <= slack) return Math.min(c, n);
+  return Math.min(lo, n);
 };
 for (const fur of LEGENDARY) {
   const row = document.createElement('div');
@@ -424,6 +431,9 @@ for (const fur of LEGENDARY) {
   row.innerHTML = `<div class="tier-label"><span class="pixel">${fur} <span class="count">× ${counts.Fur[fur]}</span></span><p>${TIER_NOTES[fur]}</p></div>`;
   const grid = document.createElement('div');
   grid.className = `tier-grid ${fur.toLowerCase()}`;
+  const n = counts.Fur[fur];
+  grid.style.setProperty('--cols', bestCols(n, Math.min(n, 9), n > 30 ? 22 : 16));
+  grid.style.setProperty('--cols-sm', bestCols(n, Math.min(n, 4), n > 30 ? 11 : 8));
   all.filter((t) => t.Fur === fur).sort((a, b) => rank.get(a.id) - rank.get(b.id)).forEach((t) => grid.append(thumb(t)));
   row.append(grid);
   $('#tiers').append(row);

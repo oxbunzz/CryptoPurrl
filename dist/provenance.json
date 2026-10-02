@@ -2,6 +2,6 @@
   "collection": "CryptoPurrls",
   "supply": 10000,
   "seed": "0x50555252",
-  "provenanceHash": "447a2d9be878dec59933f45b08ab8009187c0a359063c16e3ef23f54f68ad19c",
-  "mosaicSha256": "4b15698e61af773ef4eef6dd2c2e386ce80c3dd20071d55d834e403c265a61c9"
+  "provenanceHash": "f5cf9fab815ffedc1fa7babcc8c0a5b9036aaa7dd66179c2755086260f0f9833",
+  "mosaicSha256": "1b0535953ac2729f366b902850c6eaf5d110b8ac8ffe6e76f7af7c6a22e05815"
 }

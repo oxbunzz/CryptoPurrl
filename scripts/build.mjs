@@ -8,7 +8,7 @@
 
 import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
-import { attributes, generateCollection, rarity, renderRGBA, SEED, SIZE, SUPPLY } from '../src/purrl.js';
+import { attributes, generateCollection, LEGENDARY, rarity, renderRGBA, SEED, SIZE, SUPPLY } from '../src/purrl.js';
 import { encodePNG, upscale } from './png.mjs';
 
 const DIST = new URL('../dist/', import.meta.url);
@@ -61,10 +61,12 @@ function sheet(file, ids, cols, scale, gap = 0, bg = [11, 11, 13]) {
   });
   writeFileSync(path(file), encodePNG(w, h, out));
 }
-const byFur = (fur) => collection.filter((t) => t.Fur === fur).map((t) => t.id);
+const byFur = (fur) => collection.filter((t) => t.Fur === fur).sort((a, b) => rank.get(a.id) - rank.get(b.id)).map((t) => t.id);
 sheet('preview.png', Array.from({ length: 40 }, (_, i) => i + 1), 10, 8);
 sheet('legendary.png', [0, ...byFur('Pearl')], 5, 12, 12);
-sheet('gold.png', byFur('Gold'), 8, 8, 8);
+// One column per fixed-supply fur, rarest on the left, its four rarest Purrls stacked.
+const tiers = LEGENDARY.slice(1);
+sheet('tiers.png', [0, 1, 2, 3].flatMap((row) => tiers.map((fur) => byFur(fur)[row])), tiers.length, 6, 6);
 
 // --- Optional: every Purrl as a 480px PNG plus ERC-721 metadata, ready for IPFS.
 if (process.argv.includes('--all')) {
