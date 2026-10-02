@@ -214,23 +214,23 @@ class Grid {
 // ---------------------------------------------------------------------------
 // Backgrounds
 
-// One flat colour each, like a trading card: the cat carries all the colour.
+// One pale flat colour each, so the cat carries all the colour.
 const flat = (c) => ({ paint: () => c });
 const BACKGROUNDS = [
-  ['Bubblegum', 10, flat('#ff9fcf')],
-  ['Tangerine', 10, flat('#ffa04d')],
-  ['Lemon', 10, flat('#ffe35c')],
-  ['Lime', 9, flat('#a8e65f')],
-  ['Mint', 9, flat('#70dfc1')],
-  ['Sky', 10, flat('#6fc5ff')],
-  ['Periwinkle', 9, flat('#8e9cff')],
-  ['Lavender', 9, flat('#c4a0ff')],
-  ['Coral', 8, flat('#ff7470')],
-  ['Peach', 8, flat('#ffc9a1')],
-  ['Purrl Blue', 6, flat('#6f8fa6')],
-  ['Cloud', 6, flat('#ecebf3')],
-  ['Gold', 1, flat('#e8bb3c')],
-  ['Night', 1, flat('#1d1b2e')],
+  ['Bubblegum', 10, flat('#ffdcee')],
+  ['Tangerine', 10, flat('#ffe2c7')],
+  ['Lemon', 10, flat('#fff5c2')],
+  ['Lime', 9, flat('#e4f7c8')],
+  ['Mint', 9, flat('#d2f5ea')],
+  ['Sky', 10, flat('#d6eeff')],
+  ['Periwinkle', 9, flat('#dfe3ff')],
+  ['Lavender', 9, flat('#ebdfff')],
+  ['Coral', 8, flat('#ffdcdb')],
+  ['Peach', 8, flat('#ffeadb')],
+  ['Purrl Blue', 6, flat('#dbe5ec')],
+  ['Cloud', 6, flat('#f3f2f7')],
+  ['Gold', 1, flat('#f7e3a3')],
+  ['Pearl', 1, flat('#f6eefb')],
 ];
 
 function paintBackground(g, bg) {
@@ -389,7 +389,7 @@ function glitchPost(g) {
 }
 
 function whiskers(g) {
-  for (const [x, y] of [[3, 13], [2, 13], [3, 15], [2, 16], [20, 13], [21, 13], [20, 15], [21, 16]]) g.blend(x, y, WHITE, 0.7);
+  for (const [x, y] of [[3, 13], [2, 13], [3, 15], [2, 16], [20, 13], [21, 13], [20, 15], [21, 16]]) g.blend(x, y, INK, 0.3);
 }
 
 // ---------------------------------------------------------------------------
@@ -759,10 +759,10 @@ export const GENESIS = { id: 0, Fur: 'Genesis', Background: 'Ink' };
 // Traits that would vanish into a fur of the same colour.
 const CLASHES = {
   Gold: ['Gold Chain', 'Gold Hoop', 'Gold Grill', 'Gold', 'Lemon', 'Tangerine'],
-  Void: ['Shades', 'Void', 'Night'],
-  Midnight: ['Night'], Tuxedo: ['Night'], Neon: ['Night', 'Neon Visor'], Cosmic: ['Night'], Lava: ['Night'],
+  Void: ['Shades', 'Void'],
+  Neon: ['Neon Visor'],
   Bubblegum: ['Bubblegum'], Mint: ['Mint'], Lilac: ['Lavender', 'Periwinkle'], Ginger: ['Tangerine'], Tiger: ['Tangerine'],
-  Cream: ['Cloud'], Moo: ['Cloud'], Pearl: ['Cloud'], Calico: ['Cloud'], Chrome: ['Armor', 'Cloud'], Smoke: ['Purrl Blue'],
+  Cream: ['Cloud', 'Pearl'], Moo: ['Cloud', 'Pearl'], Pearl: ['Cloud', 'Pearl'], Calico: ['Cloud', 'Pearl'], Chrome: ['Armor', 'Cloud'], Smoke: ['Purrl Blue'],
 };
 
 function roll(rand, fur) {

@@ -17,7 +17,7 @@ Logo Purrl là một hình khối 14×14: đầu vuông, tai trái cao 3 ô, tai
 
 ## Phong cách
 
-Gọn như một con tem: **nền một màu phẳng, viền mực sắc, con mèo rực màu.** Mỗi chất liệu (lông, vằn, vải…) chỉ có hai tông là màu gốc và một tông bóng ở mép phải, dưới cằm và cổ. Mỗi Purrl được dựng qua năm lớp: **Logo → Silhouette → Light → Face → Traits**. Một bộ lông sẽ không bao giờ đi cùng nền trùng màu với nó.
+Gọn như một con tem: **nền một màu phẳng sáng nhạt, viền mực sắc, con mèo rực màu.** Mỗi chất liệu (lông, vằn, vải…) chỉ có hai tông là màu gốc và một tông bóng ở mép phải, dưới cằm và cổ. Mỗi Purrl được dựng qua năm lớp: **Logo → Silhouette → Light → Face → Traits**. Một bộ lông sẽ không bao giờ đi cùng nền trùng màu với nó.
 
 ## Huyền thoại
 
@@ -45,7 +45,7 @@ Mười bộ lông có số lượng cố định. Những bộ lông còn lại
 Số con mang từng trait trong 10.000 Purrl:
 
 - **Fur**: Cream 1.266 · Ginger 1.231 · Smoke 988 · Midnight 887 · Tuxedo 818 · Calico 685 · Siamese 595 · Bubblegum 581 · Lilac 534 · Mint 491 · Tiger 373 · Moo 309 · Leopard 291 · Neon 290 · Rainbow 175 · Zombie 111 · Glitch 88 · Lava 77 · Crystal 66 · Chrome 55 · Cosmic 42 · Gold 24 · Void 13 · Pearl 9 · Genesis 1
-- **Background**: Sky 1.013 · Lemon 971 · Bubblegum 941 · Lime 898 · Periwinkle 871 · Mint 848 · Tangerine 842 · Coral 811 · Peach 806 · Lavender 796 · Purrl Blue 531 · Cloud 490 · Gold 104 · Night 77 · Ink 1
+- **Background**: Lemon 992 · Sky 984 · Bubblegum 950 · Lime 896 · Periwinkle 879 · Mint 865 · Coral 841 · Tangerine 808 · Peach 792 · Lavender 791 · Purrl Blue 547 · Cloud 474 · Gold 107 · Pearl 73 · Ink 1
 - **Eyes**: Emerald 1.357 · Amber 1.158 · Sapphire 982 · Copper 733 · Amethyst 522 · Sleepy 503 · Ruby 431 · Ice 381 · Stars 289 · Odd Eyes 286 · Hearts 282 · KO 216 · Wink 207 · Neon Glow 153 · Cyclops 151 · Third Eye 145 · Void 138 · Laser 97
 - **Mouth**: Purr 2.771 · Smile 1.803 · Blep 1.565 · Hiss 776 · Bubblegum 705 · Pipe 594 · Gold Grill 443 · Fish 397 · Rainbow Tongue 327 · Diamond Grill 241 · Tentacles 204 · Fire Breath 173
 - **Eyewear**: Shades 811 · Specs 569 · 3D Glasses 471 · Holo Shades 346 · Eye Patch 341 · Neon Visor 340 · Monocle 336 · Cyber Eye 191
@@ -68,8 +68,8 @@ Hạng độ hiếm được tính theo kiểu rarity.tools: điểm là tổng 
 | | |
 |---|---|
 | Seed | `0x50555252` ("PURR") |
-| Provenance hash | `272611547decdd421e482e707540c6686e20503489377978b7728e3ed72c8e1b` |
-| SHA-256 của mosaic | `c69fa25470ca79104cfe4cc20eb84c976e4de9c77686167c233457d7da871a58` |
+| Provenance hash | `5dd6598ac889804f61088ae62bf6d1e9c61f404e31743526963c9ba25811e747` |
+| SHA-256 của mosaic | `845d23af2cee15e597012cf3957cc189f731daa6617295245c5317f2cb24d88d` |
 
 Provenance hash là `sha256` của chuỗi nối các `sha256` dạng hex của từng Purrl, theo thứ tự #0 → #9999. Mỗi `sha256` được tính trên 2.304 byte RGBA thô (24×24×4) của Purrl đó. Hash mosaic được tính trên pixel RGBA của `dist/purrls.png` (2400×2400, 100 con mỗi hàng). Vì băm trên pixel chứ không băm byte PNG, kết quả không phụ thuộc phiên bản zlib. Trang gallery có nút xác minh, bấm vào sẽ dựng lại cả 10.000 con ngay trong trình duyệt và so với hai hash này.
 
