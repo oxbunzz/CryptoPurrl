@@ -17,10 +17,10 @@ Logo Purrl là một khối 14×14: đầu vuông, chỏm trái cao 3 ô, chỏm
 ## Phong cách
 
 Tối giản để dễ nhìn ở cỡ ảnh đại diện:
-- Thân một màu đơn sắc, chỉ có một tông bóng ở mép phải, dưới đầu và ở chân.
+- Thân một màu phẳng; chỉ đôi chân có một tông bóng để tách khỏi thân.
 - Viền đen rõ nét.
-- Mặt nhỏ gọn.
 - Nền một màu nhạt.
+- Mặt quay nhẹ sang phải: mắt và miệng dồn về bên phải, cả hai mắt cùng nhìn sang phải, và một chấm mũi nhô ra ở mép phải đầu.
 
 Trên các thân màu tối, nét mặt được vẽ bằng màu sáng.
 
@@ -60,8 +60,8 @@ Mỗi danh sách trait có từ 19 đến 20 giá trị; những giá trị chư
 | | |
 |---|---|
 | Seed | `0x50555252` ("PURR") |
-| Provenance hash | `e2a9f7263e9fa9de742f3e70d587bb48132a3d0036eac809bd3f17045dce121c` |
-| SHA-256 của mosaic | `33ce49455ebf11e3e58a91cf47e130ca73c29c3b2e1f841793050c983bc6ed19` |
+| Provenance hash | `3341f3b4c7875f092a3f0d21483e9a2aa64a5bdb1bf6ee32f4078e1ff3c106d3` |
+| SHA-256 của mosaic | `9e4b31c1eb44190abd768f17e1f09660d33ccf8e647b060ef52d69ea90e6b512` |
 
 Provenance hash là `sha256` của chuỗi nối các `sha256` dạng hex của từng Purrl, theo thứ tự #0 → #19. Mỗi `sha256` được tính trên 2.304 byte RGBA thô (24×24×4). Hash mosaic được tính trên pixel RGBA của `dist/purrls.png` (120×96, 5 con mỗi hàng). Trang gallery có nút xác minh, bấm vào sẽ dựng lại cả bộ ngay trong trình duyệt và so với hai hash này.
 

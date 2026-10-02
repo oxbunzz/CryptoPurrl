@@ -3,7 +3,7 @@
 // Each Purrl stands at the bottom of a 24×24 canvas: a 10×10 head that is the
 // logo scaled down (tall left peak, short right peak, notched chin) on a tiny
 // body whose feet touch the bottom edge. The style is kept quiet on purpose:
-// one solid body colour with a single shade, a black outline, small faces and
+// one flat body colour, a black outline, a small face turned to the right and
 // a pale flat background, so each Purrl reads clearly at avatar size.
 //
 // There are 20 Purrls (Genesis plus 19) and every trait value is worn by
@@ -41,7 +41,8 @@ const BODY = [
 ];
 const BODY_Y = 20;
 
-const inHead = (x, y) => HEAD[y - HEAD_Y]?.[x - HEAD_X] === '#';
+// A one-pixel snout on the right shows which way the head is turned.
+const inHead = (x, y) => HEAD[y - HEAD_Y]?.[x - HEAD_X] === '#' || (x === 17 && y === 16);
 const inBody = (x, y) => BODY[y - BODY_Y]?.[x] === '#';
 const inCat = (x, y) => inHead(x, y) || inBody(x, y);
 const inOutline = (x, y) => !inCat(x, y) && (inCat(x - 1, y) || inCat(x + 1, y) || inCat(x, y - 1) || inCat(x, y + 1));
@@ -55,9 +56,8 @@ const CAT_CELLS = cells(inCat);
 const OUTLINE_CELLS = cells(inOutline);
 const TORSO_CELLS = cells((x, y) => inBody(x, y) && y < BODY_Y + 3);
 
-// One shade: the right edge of each part, the head's bottom row and the feet.
-const SHADED = new Set(CAT_CELLS.filter(([x, y]) =>
-  !inCat(x + 1, y) || (inHead(x, y) && y === HEAD_Y + 9) || y === BODY_Y + 3).map(([x, y]) => y * SIZE + x));
+// Flat colour; only the feet take a shade so they read as separate.
+const SHADED = new Set(CAT_CELLS.filter(([, y]) => y === BODY_Y + 3).map(([x, y]) => y * SIZE + x));
 
 // The full-size logo, used for Genesis.
 const LOGO = ['####..........', '####......####', '####......####', ...Array(10).fill('##############'), '.############.'];
@@ -87,9 +87,10 @@ const distance = (a, b) => Math.hypot(...hexToRgb(a).map((v, i) => v - hexToRgb(
 // Canvas
 
 class Grid {
-  constructor() { this.px = new Array(SIZE * SIZE).fill(null); }
+  constructor() { this.px = new Array(SIZE * SIZE).fill(null); this.ox = 0; }
   get(x, y) { return x < 0 || y < 0 || x >= SIZE || y >= SIZE ? null : this.px[y * SIZE + x]; }
-  set(x, y, c) { if (c && x >= 0 && y >= 0 && x < SIZE && y < SIZE) this.px[y * SIZE + x] = c; }
+  // `ox` shifts face art sideways so the face sits toward the right.
+  set(x, y, c) { x += this.ox; if (c && x >= 0 && y >= 0 && x < SIZE && y < SIZE) this.px[y * SIZE + x] = c; }
   rect(x, y, w, h, c) { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) this.set(x + i, y + j, c); }
   // ASCII sprite: '.' is transparent, every other char is looked up in `map`.
   sprite(x, y, rows, map) {
@@ -128,14 +129,13 @@ const BODIES = [
   ['Lilac', '#b9a4ff'], ['Grape', '#7a4fd6'], ['Mocha', '#9a6b4f'], ['Gold', '#f0b72f'], ['Rose', '#e8577f'],
 ];
 
-// --- Eyes: drawn in a 3×2 box per eye, left eye as written, right eye mirrored ---
+// --- Eyes: a 3×2 box per eye, both drawn the same way so the gaze points right ---
 
-const EYE_L = [8, 14], EYE_R = [13, 14];
-const mirror = (rows) => rows.map((r) => [...r].reverse().join(''));
+const EYE_L = [8, 14], EYE_R = [12, 14];
 const pair = (rows, map, right = rows) => (g, ink) => {
   const m = { k: ink, ...map };
   g.sprite(...EYE_L, rows, m);
-  g.sprite(...EYE_R, mirror(right), m);
+  g.sprite(...EYE_R, right, m);
 };
 const coloured = (c) => pair(['.wc', '.cc'], { w: WHITE, c });
 
@@ -152,20 +152,20 @@ const EYES = [
   ['Green', coloured('#2fbf5a')],
   ['Red', coloured('#e8344f')],
   ['Hearts', pair(['h.h', '.h.'], { h: '#ff3d8b' })],
-  ['Stars', (g) => { for (const x of [8, 13]) g.sprite(x, 13, ['.y.', 'yWy', '.y.'], { y: '#f5b400', W: '#fff3b0' }); }],
-  ['KO', (g, ink) => { for (const x of [8, 13]) g.sprite(x, 13, ['k.k', '.k.', 'k.k'], { k: ink }); }],
+  ['Stars', (g) => { for (const x of [8, 12]) g.sprite(x, 13, ['.y.', 'yWy', '.y.'], { y: '#f5b400', W: '#fff3b0' }); }],
+  ['KO', (g, ink) => { for (const x of [8, 12]) g.sprite(x, 13, ['k.k', '.k.', 'k.k'], { k: ink }); }],
   ['Cyclops', (g, ink) => g.sprite(10, 14, ['.kk.', 'kwkk'], { k: ink, w: WHITE })],
   ['Shades', (g) => g.sprite(7, 14, ['kkkkkkkkkk', '.kkk..kkk.'], { k: INK })],
   ['Specs', (g, ink) => {
     g.sprite(7, 13, ['.bbb..bbb.', 'bb.bbbb.bb', '.bbb..bbb.'], { b: '#8a5a2b' });
-    g.set(9, 14, ink); g.set(14, 14, ink);
+    g.set(10, 14, ink); g.set(14, 14, ink);
   }],
   ['3D Glasses', (g) => g.sprite(7, 14, ['wwwwwwwwww', '.rrw..wbb.'], { w: WHITE, r: '#e8413c', b: '#38b6e8' })],
   ['Visor', (g) => g.sprite(7, 14, ['kkkkkkkkkk', 'kppppcccck'], { k: INK, p: '#ff4fd8', c: '#3ff2ff' })],
   ['Laser', (g) => {
-    for (let x = 0; x < SIZE; x++) if (x < 9 || x > 14) g.set(x, 15, '#ff2a3d');
+    for (let x = 15; x < SIZE - 1; x++) g.set(x, 15, '#ff2a3d');
     g.sprite(...EYE_L, ['.rr', '.rr'], { r: '#ff2a3d' });
-    g.sprite(...EYE_R, ['rr.', 'rr.'], { r: '#ff2a3d' });
+    g.sprite(...EYE_R, ['.rr', '.rr'], { r: '#ff2a3d' });
   }],
 ];
 
@@ -345,8 +345,11 @@ export function renderGrid(t, stage = STAGES.length - 1) {
   outfit?.detail?.(g);
   if (stage >= 3) {
     const ink = luminance(body) < 0.4 ? FACE_LIGHT : FACE_DARK;
+    g.ox = 1;
     TABLES.Eyes[t.Eyes](g, ink);
+    g.ox = 2;
     TABLES.Mouth[t.Mouth](g, ink);
+    g.ox = 0;
   }
   if (stage >= 4) TABLES.Headwear[t.Headwear](g);
   return g.px;
