@@ -198,9 +198,9 @@ td.type { color: var(--muted); }
         <div class="stages" id="stages" aria-label="Các lớp dựng hình"></div>
       </div>
       <div class="pitch">
-        <p class="eyebrow">Bộ sưu tập pixel 24×24</p>
+        <p class="eyebrow">Bộ sưu tập pixel 32×32</p>
         <h1>Một logo. Hai mươi sinh vật.</h1>
-        <p class="lede">20 sinh vật kiểu CryptoPunk, chỉ có đầu và cổ, mang đúng silhouette của logo và quay mặt sang phải: chỏm cao ở sau gáy, chỏm thấp phía trước, cằm vát. Nền một màu nhạt, viền mực sắc, màu sắc nằm hết trên nhân vật. Không có trait nào xuất hiện hai lần trong cả bộ: mỗi thân, nền, mắt, miệng, mũ và trang phục là 1/1.</p>
+        <p class="lede">20 sinh vật chibi: đầu to đúng silhouette của logo, thân bé xíu, đứng gọn giữa khung để vừa ảnh tròn PFP trên X — chỏm cao ở sau gáy, chỏm thấp phía trước, cằm vát. Nền một màu nhạt, viền mực sắc, màu sắc nằm hết trên nhân vật. Không có trait nào xuất hiện hai lần trong cả bộ: mỗi thân, nền, mắt, miệng, mũ và trang phục là 1/1.</p>
         <div class="lot-card" aria-live="polite">
           <div class="lot-head">
             <span class="pixel" id="lot-id">#0</span>
@@ -240,15 +240,15 @@ td.type { color: var(--muted); }
       </div>
       <div class="prov">
         <div>
-          <div class="mosaic-wrap"><canvas class="px" id="mosaic" width="120" height="96" role="img" aria-label="Toàn bộ 20 CryptoPurrl xếp 5 × 4"></canvas></div>
-          <p class="caption">Đủ 20 Purrl, mỗi con 24×24 pixel, xếp thành lưới 5 × 4. Bấm vào một ô để mở con đó.</p>
+          <div class="mosaic-wrap"><canvas class="px" id="mosaic" width="160" height="128" role="img" aria-label="Toàn bộ 20 CryptoPurrl xếp 5 × 4"></canvas></div>
+          <p class="caption">Đủ 20 Purrl, mỗi con 32×32 pixel, xếp thành lưới 5 × 4. Bấm vào một ô để mở con đó.</p>
         </div>
         <div class="record">
           <dl>
             <div><dt>Seed</dt><dd id="p-seed">0x50555252 (“PURR”)</dd></div>
             <div><dt>Provenance hash</dt><dd id="p-hash">Đang tải…</dd></div>
-            <div><dt>SHA-256 của mosaic (RGBA 120×96)</dt><dd id="p-mosaic">Đang tải…</dd></div>
-            <div><dt>Cách tính</dt><dd>sha256( sha256(Purrl #0) ‖ sha256(Purrl #1) ‖ … ‖ sha256(Purrl #19) ), mỗi sha256 lấy trên 2.304 byte RGBA của một Purrl, nối theo dạng hex.</dd></div>
+            <div><dt>SHA-256 của mosaic (RGBA 160×128)</dt><dd id="p-mosaic">Đang tải…</dd></div>
+            <div><dt>Cách tính</dt><dd>sha256( sha256(Purrl #0) ‖ sha256(Purrl #1) ‖ … ‖ sha256(Purrl #19) ), mỗi sha256 lấy trên 4.096 byte RGBA của một Purrl, nối theo dạng hex.</dd></div>
           </dl>
           <div class="verify">
             <p>Dựng lại 20 Purrl ngay trong trình duyệt này rồi băm lại để so với hash đã công bố.</p>
@@ -262,7 +262,7 @@ td.type { color: var(--muted); }
   </main>
 
   <footer>
-    <span>CryptoPurrls · 20 × 24×24 · seed 0x50555252</span>
+    <span>CryptoPurrls · 20 × 32×32 · seed 0x50555252</span>
     <span>Mã nguồn: <a href="https://github.com/oxbunzz/CryptoPurrl" target="_blank" rel="noopener">oxbunzz/CryptoPurrl</a></span>
   </footer>
 </div>

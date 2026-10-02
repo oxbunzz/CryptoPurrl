@@ -1,17 +1,17 @@
 // CryptoPurrls — 10,000 generative 24×24 pixel cats grown from the Purrl logo.
 //
-// Purrls are small creatures shaped exactly like the logo: a 14×14 block head
-// with a tall left horn, a shorter right horn and a notched chin. The look is
-// flat and graphic: one pale background colour, a crisp ink outline, and a body
-// drawn in two tones per material, so all the colour lives on the creature.
-// The bust is cropped like a CryptoPunk: head and neck on a 24×24 canvas, the
-// face turned to the right. There are 20 Purrls and every trait value is worn by exactly one of them.
+// Purrls are small chibi creatures whose big head is exactly the logo: a
+// 14×14 block with a tall left peak, a shorter right peak and a notched chin.
+// They stand small in the middle of a 32×32 canvas, so a round profile-picture
+// crop keeps all of them. Pale flat backgrounds, soft three-tone shading, an
+// outline in the body's own hue, glossy eyes and rosy cheeks.
+// There are 20 Purrls and every trait value is worn by exactly one of them.
 //
 // The whole collection is reproducible from SEED, so anyone can regenerate it
 // and check it against the provenance hash. Plain ES module with no
 // dependencies: the same file renders in Node and in the browser.
 
-export const SIZE = 24;
+export const SIZE = 32;
 export const SUPPLY = 20;
 export const SEED = 0x50555252; // "PURR"
 
@@ -23,9 +23,8 @@ const PUPIL = '#140c1f';
 // ---------------------------------------------------------------------------
 // Silhouette
 
-// The logo, one character per logo cell, placed 1:1 on the 24×24 canvas. The
-// head turns three-quarters to the right: the tall peak sits at the back, the
-// short one at the front, and a one-pixel snout pokes out of the face.
+// The logo, one character per logo cell, placed 1:1 as the head of a chibi
+// body in the middle of a 32×32 canvas, with room around it for a round crop.
 const LOGO = [
   '####..........',
   '####......####',
@@ -33,20 +32,22 @@ const LOGO = [
   ...Array(10).fill('##############'),
   '.############.',
 ];
-const HEAD_X = 6, HEAD_Y = 5;
-const SNOUT = new Set([13 * 24 + 20, 14 * 24 + 20]);
+const HEAD_X = 9, HEAD_Y = 6;
+// Soften the outer top corner of each peak.
+const ROUNDED = new Set([6 * 32 + 9, 7 * 32 + 22]);
 
-// Punk-style bust: just a neck, set under the back of the head.
+// A small body under the big head: torso with arm nubs, then two feet.
 const BODY = [
-  '.........#######........',
-  '.........#######........',
-  '.........#######........',
-  '.........#######........',
-  '.........#######........',
-];
-const BODY_Y = 19;
+  '            ########            ',
+  '           ##########           ',
+  '           ##########           ',
+  '            ########            ',
+  '            ########            ',
+  '            ###  ###            ',
+].map((r) => r.replace(/ /g, '.'));
+const BODY_Y = 20;
 
-const inHead = (x, y) => LOGO[y - HEAD_Y]?.[x - HEAD_X] === '#' || SNOUT.has(y * SIZE + x);
+const inHead = (x, y) => LOGO[y - HEAD_Y]?.[x - HEAD_X] === '#' && !ROUNDED.has(y * SIZE + x);
 const inBody = (x, y) => BODY[y - BODY_Y]?.[x] === '#';
 const inCat = (x, y) => inHead(x, y) || inBody(x, y);
 const inOutline = (x, y) => !inCat(x, y) && (inCat(x - 1, y) || inCat(x + 1, y) || inCat(x, y - 1) || inCat(x, y + 1));
@@ -63,18 +64,16 @@ const OUTLINE_CELLS = cells(inOutline);
 // One pixel beyond the outline, for glows.
 const HALO_CELLS = cells((x, y) => !solid(x, y) && (inOutline(x - 1, y) || inOutline(x + 1, y) || inOutline(x, y - 1) || inOutline(x, y + 1)));
 
-// Two tones: base, and a shade on the back of the head (the two columns
-// furthest from the light, which comes from the front), the chin and the neck.
+// Three soft tones: a shine on the upper left of the head, base, and shade
+// on the right edge, under the head and along the bottom of every part.
 const TONE = new Int8Array(SIZE * SIZE).fill(-1);
+const SHINE = new Set([10 * 32 + 11, 10 * 32 + 12, 11 * 32 + 11]);
 for (const [x, y] of CAT_CELLS) {
-  let left = x;
-  while (inCat(left - 1, y) && inHead(left - 1, y) === inHead(x, y)) left--;
-  const back = x - left < 2, chin = y === HEAD_Y + 13, neck = !inHead(x, y) && y < BODY_Y + 2;
-  TONE[y * SIZE + x] = back || chin || neck ? 2 : 1;
+  const edge = !inCat(x + 1, y) || !inCat(x, y + 1) || (inHead(x, y) && y === HEAD_Y + 13);
+  const tucked = !inHead(x, y) && y === BODY_Y;
+  TONE[y * SIZE + x] = SHINE.has(y * SIZE + x) ? 0 : edge || tucked ? 2 : 1;
 }
-
-// Flat look: lit pixels use the base colour, occluded ones the single shade.
-const FLAT_TONE = [1, 1, 2, 2];
+const FLAT_TONE = [0, 1, 2, 3];
 
 // ---------------------------------------------------------------------------
 // Colour
@@ -381,184 +380,92 @@ function glitchPost(g) {
 // ---------------------------------------------------------------------------
 // Traits. Each option: [name, weight, draw?, flags?]
 
-// --- Eyes: 2×3 at both anchors ----------------------------------------------------
+// --- Eyes: 3×4 at both anchors, big and glossy ---------------------------------
 
-const EYE_L = [14, 13], EYE_R = [19, 13];
-const irisEye = (iris) => (g, [x, y]) => g.sprite(x, y, ['Iw', 'ik', 'ii'], { I: ramp(iris)[2], i: iris, k: PUPIL, w: WHITE });
-const closed = (g, [x, y]) => g.sprite(x, y, ['..', 'kk', '..'], { k: PUPIL });
+const EYE_L = [12, 13], EYE_R = [17, 13];
 const both = (draw, right = draw) => (g) => { draw(g, EYE_L); right(g, EYE_R); };
-const glowing = (iris, core) => (g, [x, y]) => {
-  for (let j = 0; j < 3; j++) for (let i = 0; i < 2; i++) g.glow(x + i, y + j, iris, 0.22);
-  g.sprite(x, y, ['iw', 'iw', 'ii'], { i: iris, w: core });
-};
-const big = (rows, map) => (g, [x, y]) => g.sprite(x - (x === EYE_L[0] ? 1 : 0), y, rows, map);
+const eyeArt = (rows, map) => (g, [x, y]) => g.sprite(x, y, rows, map);
+// Dark at the top fading into a bright iris, with a big and a small highlight.
+const sparkle = (iris) => eyeArt(['kkk', 'wkk', 'kIw', 'iii'], { k: PUPIL, w: WHITE, I: ramp(iris)[2], i: iris });
+const happy = eyeArt(['...', '.k.', 'k.k', '...'], { k: PUPIL });
+const MAP_K = { k: PUPIL };
 
 const EYES = [
-  ['Emerald', 18, both(irisEye('#3fd17a'))],
-  ['Amber', 16, both(irisEye('#ffb52e'))],
-  ['Sapphire', 14, both(irisEye('#3d8bff'))],
-  ['Copper', 10, both(irisEye('#ff7a3d'))],
-  ['Amethyst', 7, both(irisEye('#b05cff'))],
-  ['Ruby', 6, both(irisEye('#ff3d6e'))],
-  ['Ice', 5, both(irisEye('#7ff3ff'))],
-  ['Sleepy', 7, both(closed)],
-  ['Odd Eyes', 4, both(irisEye('#3d8bff'), irisEye('#ffb52e'))],
-  ['Wink', 3, both(irisEye('#3fd17a'), closed)],
-  ['Hearts', 3, both(big(['h.h', 'Hhh', '.h.'], { h: '#ff3d8b', H: '#ffc2dc' })), { bare: true }],
-  ['Stars', 3, both(big(['.y.', 'yWy', '.y.'], { y: '#ffd23f', W: WHITE })), { bare: true }],
-  ['Void', 2, both((g, [x, y]) => g.sprite(x, y, ['kk', 'kw', 'kk'], { k: '#000000', w: WHITE }))],
-  ['KO', 2, both(big(['k.k', '.k.', 'k.k'], { k: PUPIL })), { bare: true }],
-  ['Neon Glow', 2, both(glowing('#2ff3ff', '#e9ffff'))],
-  ['Third Eye', 2, (g) => {
-    both(irisEye('#3fd17a'))(g);
-    g.glow(16, 11, '#c27dff', 0.3); g.glow(17, 11, '#c27dff', 0.3);
-    g.sprite(16, 10, ['kk', 'Pw', 'kk'], { k: PUPIL, P: '#7a2fd6', w: WHITE });
-  }, { bare: true }],
-  ['Cyclops', 1.5, (g) => g.sprite(14, 11, [
-    '.kkkk.',
-    'kwwwwk',
-    'wwiiIw',
-    'wiikiw',
-    '.wiiw.',
-  ], { k: PUPIL, w: '#f6f3ff', i: '#ff4f8b', I: WHITE }), { bare: true }],
+  ['Sky Sparkle', 1, both(sparkle('#4fb3ff'))],
+  ['Rose Sparkle', 1, both(sparkle('#ff5fa2'))],
+  ['Leaf Sparkle', 1, both(sparkle('#3fd17a'))],
+  ['Grape Sparkle', 1, both(sparkle('#a46bff'))],
+  ['Honey Sparkle', 1, both(sparkle('#ffb52e'))],
+  ['Hearts', 1, both(eyeArt(['h.h', 'hHh', 'hhh', '.h.'], { h: '#ff3d8b', H: '#ffc2dc' }))],
+  ['Stars', 1, both(eyeArt(['.y.', 'yWy', '.y.', 'y.y'], { y: '#ffc93d', W: WHITE }))],
+  ['Happy', 1, both(happy)],
+  ['Sleepy', 1, both(eyeArt(['...', '...', 'kkk', '...'], MAP_K))],
+  ['Wink', 1, both(sparkle('#4fb3ff'), happy)],
+  ['Teary', 1, (g) => {
+    both(sparkle('#7fd6ff'))(g);
+    g.sprite(11, 16, ['t', 't'], { t: '#8fdcff' });
+    g.sprite(20, 16, ['t', 't'], { t: '#8fdcff' });
+  }],
+  ['Dizzy', 1, both(eyeArt(['kkk', '..k', 'k.k', 'kkk'], MAP_K))],
+  ['Squint', 1, both(eyeArt(['k..', '.k.', 'k..', '...'], MAP_K), eyeArt(['..k', '.k.', '..k', '...'], MAP_K))],
+  ['Cyclops', 1, (g) => g.sprite(13, 12, ['.kkkk.', 'kwkkkk', 'kkkkwk', 'kiiiik', '.iiii.'], { k: PUPIL, w: WHITE, i: '#ff4f8b' })],
+  ['Odd Eyes', 1, both(sparkle('#4fb3ff'), sparkle('#ffb52e'))],
   ['Laser', 1, (g) => {
-    // The front eye fires a beam the way the creature faces; the back eye only glows.
-    const [x, y] = EYE_R;
-    for (let bx = x + 2; bx < SIZE + 9; bx++) {
-      g.set(bx, y + 1, '#fff2b0');
-      g.blend(bx, y, '#ff2a4a', 0.75);
-      g.blend(bx, y + 2, '#ff2a4a', 0.75);
-      g.blend(bx, y - 1, '#ff2a4a', 0.3);
-      g.blend(bx, y + 3, '#ff2a4a', 0.3);
+    for (const [x, y] of [EYE_L, EYE_R]) {
+      const out = x < 15 ? -1 : 1;
+      for (let i = 1; i < SIZE; i++) {
+        const bx = out < 0 ? x - i : x + 2 + i;
+        g.set(bx, y + 2, '#fff2b0');
+        g.blend(bx, y + 1, '#ff2a4a', 0.7);
+        g.blend(bx, y + 3, '#ff2a4a', 0.7);
+      }
+      g.sprite(x, y, ['rrr', 'rwr', 'rrr', 'rrr'], { r: '#ff2a1f', w: '#fff3ef' });
     }
-    for (const [ex, ey] of [EYE_L, EYE_R]) {
-      for (let j = 0; j < 3; j++) for (let i = 0; i < 2; i++) g.glow(ex + i, ey + j, '#ff2a4a', 0.2);
-      g.sprite(ex, ey, ['rw', 'rr', 'rr'], { r: '#ff2a1f', w: '#fff3ef' });
-    }
-  }, { bare: true }],
-];
-
-// --- Mouth (the nose is always drawn first at 11–12, 13) ---------------------------
-
-const MOUTHS = [
-  ['Smile', 16, (g) => g.sprite(9, 14, ['k....k', '.kkkk.'], { k: PUPIL })],
-  ['Blep', 14, (g) => g.sprite(9, 14, ['k.kk.k', '.kppk.', '..pP..'], { k: PUPIL, p: '#ff6f91', P: '#d94370' })],
-  ['Hiss', 7, (g) => g.sprite(9, 14, ['kkkkkk', 'kwrrwk', '.kkkk.'], { k: PUPIL, w: WHITE, r: '#8e2b3a' })],
-  ['Bubblegum', 7, (g) => g.sprite(9, 14, ['.pppp.', 'pPPPPp', 'pPwPPp', '.pppp.'], { p: '#f27ab0', P: '#fbb8d6', w: WHITE })],
-  ['Pipe', 5, (g) => g.sprite(9, 11, [
-    '.........ss',
-    '..........s',
-    '........kkkk',
-    'k.kk.k..kbbk',
-    '.k..kbbbbbbk',
-    '......kkkkk.',
-  ], { k: PUPIL, b: '#8a5230', s: ['blend', WHITE, 0.6] })],
-  ['Fish', 4, (g) => g.sprite(10, 13, [
-    '..kkkkk..k.',
-    '.kssssSk.kk',
-    'kwksssSSkSk',
-    '.kssssSk.kk',
-    '..kkkkk..k.',
-  ], { k: PUPIL, s: '#b3d3e6', S: '#7ea9c4', w: WHITE })],
-  ['Gold Grill', 4, (g) => g.sprite(9, 14, ['k....k', 'kGgGgk', '.kkkk.'], { k: PUPIL, g: '#ffd75e', G: '#fff3b8' })],
-  ['Diamond Grill', 2, (g) => g.sprite(9, 14, ['k....k', 'kDdDdk', '.kkkk.'], { k: PUPIL, d: '#8ff3ff', D: WHITE })],
-  ['Rainbow Tongue', 3, (g) => g.sprite(9, 14, [
-    'k.kk.k',
-    '.kRRk.',
-    '..OO..',
-    '..YY..',
-    '..GG..',
-    '..BB..',
-  ], { k: PUPIL, R: '#ff5f7e', O: '#ff9f43', Y: '#ffd93d', G: '#6bdc8a', B: '#4fb3ff' })],
-  ['Tentacles', 2, (g) => g.shape(9, 14, [
-    '.pppp.',
-    'pPppPp',
-    'p.pp.p',
-    'p.Pp.p',
-    'P.p..P',
-    '..P...',
-  ], { p: '#b066ff', P: '#7a35c9' })],
-  ['Grin', 1, (g) => g.sprite(9, 14, ['kkkkkk', 'kwwwwk', '.kkkk.'], { k: PUPIL, w: WHITE })],
-  ['Gasp', 1, (g) => g.sprite(10, 13, ['.kk.', 'krrk', 'krrk', '.kk.'], { k: PUPIL, r: '#8e2b3a' })],
-  ['Zipper', 1, (g) => g.sprite(8, 14, ['kskskskk', '.......s', '.......s'], { k: PUPIL, s: '#c9d3e6' })],
-  ['Lollipop', 1, (g) => g.sprite(9, 11, [
-    '......pPp',
-    '......PwP',
-    '......pPp',
-    'k....kw..',
-    '.kkkk.w..',
-  ], { k: PUPIL, p: '#ff5fa2', P: '#ffd23f', w: WHITE })],
-  ['Mustache', 1, (g) => g.sprite(8, 13, ['.kk..kk.', 'kkkkkkkk', 'k......k', '...kk...'], { k: '#4a2a18' })],
-  ['Buck Teeth', 1, (g) => g.sprite(9, 14, ['kkkkkk', '.kwwk.', '..ww..'], { k: PUPIL, w: WHITE })],
-  ['Kiss', 1, (g) => g.sprite(10, 13, ['.rr.', 'rRRr', 'rRRr', '.rr.'], { r: '#ff3d6e', R: '#ff9cb8' })],
-  ['Braces', 1, (g) => g.sprite(9, 14, ['kkkkkk', 'kwswsk', '.kkkk.'], { k: PUPIL, w: WHITE, s: '#9aa6c0' })],
-  ['Stitched', 1, (g) => g.sprite(9, 14, ['.k.k.k', 'kkkkkk', '.k.k.k'], { k: '#5a2a3a' })],
-  ['Fire Breath', 1.5, (g) => g.sprite(10, 13, [
-    '.kkk.....rr..',
-    'kooookrrooorr',
-    'kyywyyooyyyor',
-    'kooooyyyyoorr',
-    '.kkk.rroooor.',
-    '.......rrr...',
-  ], { k: PUPIL, w: WHITE, y: '#ffe36b', o: '#ff8a1f', r: '#e83a2a' })],
-];
-
-// --- Eyewear (optional) -------------------------------------------------------------
-
-// Glasses sit over both eyes, with the arm running back toward the ear.
-const glasses = (frame, left, right, glare) => (g) => g.sprite(9, 12, [
-  '....kkkkkkkkkk',
-  'kkkkkgakkkgbk.',
-  '....kaAk.kbBk.',
-  '.....kk...kk..',
-], { k: frame, a: left[0], A: left[1], b: right[0], B: right[1], g: glare });
-const shades = (frame, lens, glare) => glasses(frame, lens, lens, glare);
-
-const EYEWEAR = [
-  ['None', 62],
-  ['Shades', 9, shades(INK, ['#2b3340', '#1a1f29'], '#6f7f99'), { hidesEyes: true }],
-  ['Holo Shades', 4, shades('#2a1840', ['#ff6bd6', '#3ff2ff'], WHITE), { hidesEyes: true }],
-  ['Specs', 7, (g) => g.sprite(4, 9, [
-    '..kkkk....kkkk..',
-    'kkk..kkkkkk..kkk',
-    '..k..k....k..k..',
-    '..k..k....k..k..',
-    '..kkkk....kkkk..',
-  ], { k: PUPIL })],
-  ['3D Glasses', 5, glasses('#f4f4f4', ['#e8413c', '#c42f2b'], ['#38b6e8', '#2a8fc0'], '#ffb3b0'), { hidesEyes: true }],
-  ['Monocle', 4, (g) => g.sprite(18, 12, ['gggg', 'g..g', 'g..g', 'g..g', 'gggg', '...g', '...g', '..g.'], { g: '#ffcf4a' })],
-  ['Neon Visor', 4, (g) => {
-    g.sprite(9, 12, [
-      '....kkkkkkkkkkk',
-      'kkkkkabcdeffghk',
-      '....kabcdeffghk',
-      '....kkkkkkkkkkk',
-    ], { k: '#1a1030', a: '#ff4fd8', b: '#ff5fc0', c: '#f06bff', d: '#b77bff', e: '#7b8cff', f: '#4fb8ff', g: '#3fe0ff', h: '#3ff2ff' });
-    for (let x = 13; x < 24; x++) { g.blend(x, 11, '#ff7be8', 0.25); g.blend(x, 16, '#3ff2ff', 0.25); }
-  }, { hidesEyes: true }],
-  ['Eye Patch', 4, (g) => g.sprite(4, 8, [
-    'k..............k',
-    '.k...........kk.',
-    '..kkkkkkkkkkk...',
-    '..kkkk..........',
-    '..kkkk..........',
-    '...kk...........',
-  ], { k: PUPIL })],
-  ['Cyber Eye', 2, (g) => {
-    g.sprite(18, 12, ['mmmm', 'mrRm', 'mRRm', 'mmmm'], { m: '#7d8aa3', r: '#ffe0e0', R: '#ff2a3d' });
-    g.sprite(15, 16, ['cccc'], { c: '#3ff2ff' });
-    g.glow(19, 14, '#ff2a3d', 0.25); g.glow(20, 14, '#ff2a3d', 0.25);
+  }],
+  ['Galaxy', 1, both(eyeArt(['kkk', 'wkk', 'kgy', 'ggg'], { k: '#120a2e', w: WHITE, g: '#5a3fd6', y: '#ffe36b' }))],
+  ['Shades', 1, (g) => g.sprite(10, 13, [
+    'kkkkkkkkkkkk',
+    '.kgLLkkgLLk.',
+    '..kkk..kkk..',
+  ], { k: INK, g: '#6f7f99', L: '#2b3340' })],
+  ['Heart Glasses', 1, (g) => g.sprite(10, 13, [
+    'HH.HH.HH.HH',
+    'HHHHHkHHHHH',
+    '.HHH...HHH.',
+    '..H.....H..',
+  ], { H: '#ff3d8b', k: '#b0185a' })],
+  ['Round Specs', 1, (g) => {
+    both(sparkle('#3fd17a'))(g);
+    g.sprite(11, 12, ['.kkk..kkk.', 'k...kk...k', 'k...k....k'.replace('k....k', 'k...k'), 'k...kk...k', '.kkk..kkk.'].map((r) => r.slice(0, 10)), { k: '#4a2a18' });
   }],
 ];
 
-// Eyes and eyewear share one trait: glasses that leave the eyes visible sit over plain dot eyes.
-const dotEyes = both(irisEye(PUPIL));
-const EYE_STYLES = [
-  ...['Laser', 'Cyclops', 'Third Eye', 'Neon Glow', 'Hearts', 'Stars', 'KO', 'Void', 'Odd Eyes', 'Wink', 'Sleepy', 'Ruby', 'Ice', 'Amethyst']
-    .map((n) => EYES.find((e) => e[0] === n)),
-  ...['Shades', 'Holo Shades', '3D Glasses', 'Neon Visor'].map((n) => EYEWEAR.find((e) => e[0] === n)),
-  ...['Monocle', 'Cyber Eye'].map((n) => { const e = EYEWEAR.find((o) => o[0] === n); return [n, 1, (g) => { dotEyes(g); e[2](g); }]; }),
+// --- Mouth: tiny and centred under the eyes ---------------------------------------
+
+const MOUTHS = [
+  ['Smile', 1, (g) => g.sprite(14, 17, ['k..k', '.kk.'], MAP_K)],
+  ['Open', 1, (g) => g.sprite(14, 17, ['kkkk', 'krpk', '.kk.'], { k: PUPIL, r: '#8e2b3a', p: '#ff7a9a' })],
+  ['Blep', 1, (g) => g.sprite(14, 17, ['.kk.', '.pp.'], { k: PUPIL, p: '#ff6f91' })],
+  ['Fang', 1, (g) => g.sprite(14, 17, ['k..k', '.kk.', '.w..'], { k: PUPIL, w: WHITE })],
+  ['Tiny O', 1, (g) => g.sprite(15, 17, ['kk', 'kk'], MAP_K)],
+  ['Grin', 1, (g) => g.sprite(13, 17, ['kkkkkk', 'kwwwwk', '.kkkk.'], { k: PUPIL, w: WHITE })],
+  ['Pout', 1, (g) => g.sprite(15, 17, ['kk', '.k', 'kk'], MAP_K)],
+  ['Wavy', 1, (g) => g.sprite(13, 17, ['k.k.k', '.k.k.'], MAP_K)],
+  ['Kiss', 1, (g) => g.sprite(14, 17, ['.rr.', 'rRRr', '.rr.'], { r: '#ff3d6e', R: '#ff9cb8' })],
+  ['Bubblegum', 1, (g) => g.sprite(13, 16, ['.pppp.', 'pPwPPp', 'pPPPPp', '.pppp.'], { p: '#f27ab0', P: '#fbb8d6', w: WHITE })],
+  ['Lollipop', 1, (g) => g.sprite(14, 15, ['....pPp', '....PwP', 'k..kpPp', '.kk.w..', '....w..'], { k: PUPIL, p: '#ff5fa2', P: '#ffd23f', w: WHITE })],
+  ['Drool', 1, (g) => g.sprite(14, 17, ['k..k', '.kkd', '...d'], { k: PUPIL, d: '#8fdcff' })],
+  ['Surprised', 1, (g) => g.sprite(14, 17, ['.kk.', 'krrk', '.kk.'], { k: PUPIL, r: '#8e2b3a' })],
+  ['Smirk', 1, (g) => g.sprite(14, 17, ['...k', 'kkk.'], MAP_K)],
+  ['Gold Grill', 1, (g) => g.sprite(14, 17, ['kkkk', 'kgGk', '.kk.'], { k: PUPIL, g: '#ffd75e', G: '#fff3b8' })],
+  ['Rainbow Tongue', 1, (g) => g.sprite(14, 17, ['kkkk', '.RO.', '.YG.', '.BB.'], { k: PUPIL, R: '#ff5f7e', O: '#ff9f43', Y: '#ffd93d', G: '#6bdc8a', B: '#4fb3ff' })],
+  ['Diamond Grill', 1, (g) => g.sprite(14, 17, ['kkkk', 'kdDk', '.kk.'], { k: PUPIL, d: '#8ff3ff', D: WHITE })],
+  ['Fish', 1, (g) => g.sprite(14, 16, ['..kkkk..k', '.kssssSkk', 'kwkssSSkk', '.kssssSkk', '..kkkk..k'], { k: PUPIL, s: '#b3d3e6', S: '#7ea9c4', w: WHITE })],
+  ['Zipper', 1, (g) => g.sprite(13, 17, ['kskskk', '.....s'], { k: PUPIL, s: '#c9d3e6' })],
+  ['Fire Breath', 1, (g) => g.sprite(14, 16, ['.kk...rr..', 'kooorrooor', 'kyywyyyyor', 'kooooyyoor', '.kk.rrooo.'], { k: PUPIL, w: WHITE, y: '#ffe36b', o: '#ff8a1f', r: '#e83a2a' })],
 ];
+
+const EYE_STYLES = EYES;
 
 // --- Headwear (optional). Hats sit in the logo's notch, between the ears. ----------------
 
@@ -723,7 +630,7 @@ const OUTFITS = [
   }],
   ['Puffer', 4, { mat: { '#': '#3fc8ff' }, rows: 'body' }, (g) => g.abs(() => {
     for (const [x, y] of CAT_CELLS) if (y >= BODY_Y && (y - BODY_Y) % 2 === 1) g.blend(x, y, '#1a3f9a', 0.35);
-    g.rect(12, BODY_Y, 1, SIZE - BODY_Y, '#3a3a4a');
+    g.rect(15, BODY_Y, 2, 5, '#3a3a4a');
   })],
   ['Tie-Dye', 1, (g) => g.abs(() => {
     const cs = ['#ff7ab8', '#ffd23f', '#3fc8ff', '#8f7bff'];
@@ -877,7 +784,7 @@ export function renderGrid(t, stage = STAGES.length - 1) {
   if (stage >= 2) {
     if (fur.glow) for (const [x, y] of HALO_CELLS) g.blend(x, y, fur.glow, 0.45);
   }
-  if (traits) g.at(1, 1, option('Headwear')[3]?.back);
+  if (traits) g.at(4, 2, option('Headwear')[3]?.back);
 
   // The body: materials resolved through the tone map.
   const under = g.px.slice();
@@ -888,7 +795,7 @@ export function renderGrid(t, stage = STAGES.length - 1) {
     set: (x, y, k) => { if (inCat(x, y)) mat[y * SIZE + x] = k; },
     // Pattern sprites are drawn for the reference head, so shift them like traits.
     sprite: (x, y, rows, keys, key) => rows.forEach((row, j) => [...row].forEach((ch, i) => {
-      if (ch !== '.' && ch !== ' ' && keys.includes(ch)) m.set(x + i + 1, y + j + 1, key ?? ch);
+      if (ch !== '.' && ch !== ' ' && keys.includes(ch)) m.set(x + i + 4, y + j + 2, key ?? ch);
     })),
   };
   for (const [x, y] of CAT_CELLS) mat[y * SIZE + x] = 'fur';
@@ -906,7 +813,8 @@ export function renderGrid(t, stage = STAGES.length - 1) {
     else if (k === 'fur' && fur.paint) g.set(x, y, fur.paint(x, y, tone, g.seed, under[i]));
     else g.set(x, y, ramps[k][tone]);
   }
-  g.outlineColor = fur.outline ?? INK;
+  // A dark outline in the body's own hue instead of flat black.
+  g.outlineColor = fur.outline ?? mix(ramps.fur[3], INK, 0.45);
   for (const [x, y] of OUTLINE_CELLS) g.set(x, y, g.outlineColor);
 
   // Front plane.
@@ -914,16 +822,21 @@ export function renderGrid(t, stage = STAGES.length - 1) {
     const outfit = option('Outfit');
     // Neckwear is clipped to the neck and its outline.
     const before = g.px.slice();
-    g.at(1, 1, typeof outfit[2] === 'function' ? outfit[2] : outfit[3]);
+    g.at(4, 2, typeof outfit[2] === 'function' ? outfit[2] : outfit[3]);
     for (let i = 0; i < g.px.length; i++) if (!solid(i % SIZE, Math.floor(i / SIZE))) g.px[i] = before[i];
   }
   if (stage >= 3) {
-    // Eye art is placed for a head at (9, 7).
-    g.at(-3, -2, option('Eyes')?.[2]);
-    g.at(5, 1, option('Mouth')[2]);
+    // Rosy cheeks under the outer corners of the eyes.
+    for (const x of [10, 11, 20, 21]) g.blend(x, 17, '#ff6f9a', 0.4);
+    const bare = g.px.slice();
+    option('Eyes')?.[2]?.(g);
+    option('Mouth')[2]?.(g);
+    // On dark bodies the face is drawn in a light ink so it stays readable.
+    if (toHsl(ramps.fur[1])[2] < 0.3)
+      for (let i = 0; i < g.px.length; i++) if (g.px[i] === PUPIL && bare[i] !== PUPIL) g.px[i] = '#f6ecff';
   }
   if (traits) {
-    g.at(1, 1, option('Headwear')[2]);
+    g.at(4, 2, option('Headwear')[2]);
   }
   if (stage >= 2) fur.post?.(g);
   return g.px;

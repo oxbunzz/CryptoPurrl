@@ -1,10 +1,10 @@
 # CryptoPurrls
 
-**20 sinh vật pixel 24×24 mọc ra từ một logo. Không có trait nào xuất hiện hai lần.**
+**20 sinh vật pixel 32×32 mọc ra từ một logo. Không có trait nào xuất hiện hai lần.**
 
 ![Toàn bộ 20 Purrl](dist/preview.png)
 
-Logo Purrl là một khối 14×14: đầu vuông, chỏm trái cao 3 ô, chỏm phải thấp 2 ô, cằm vát hai góc. Mỗi Purrl là một sinh vật vẽ theo kiểu CryptoPunk: khung 24×24, chỉ có đầu và cổ, đầu mang đúng silhouette logo đặt 1:1 và quay mặt sang phải: chỏm cao nằm sau gáy, chỏm thấp phía trước, hai mắt dồn về bên phải, miệng và một chấm mũi ở phía trước.
+Logo Purrl là một khối 14×14: đầu vuông, chỏm trái cao 3 ô, chỏm phải thấp 2 ô, cằm vát hai góc. Mỗi Purrl là một sinh vật **chibi kawaii**: cái đầu to chính là silhouette logo đặt 1:1 (bo nhẹ góc hai chỏm), thân bé xíu có tay và chân ngắn. Nhân vật đứng gọn giữa khung 32×32 và chừa lề xung quanh, nên khi X cắt ảnh đại diện thành hình tròn vẫn thấy trọn nhân vật.
 
 ```
 ####..........      ← chỏm trái cao
@@ -17,7 +17,10 @@ Logo Purrl là một khối 14×14: đầu vuông, chỏm trái cao 3 ô, chỏm
 
 ## Phong cách
 
-Gọn như một con tem: **nền một màu phẳng sáng nhạt, viền mực sắc, nhân vật rực màu.** Mỗi chất liệu chỉ có hai tông là màu gốc và một tông bóng ở gáy, dưới cằm và cổ.
+- Nền một màu phẳng sáng nhạt.
+- Đổ bóng ba tông mềm: một điểm sáng trên đầu, màu gốc, và bóng ở mép phải, dưới đầu và dưới chân.
+- Viền đậm cùng tông với thân thay cho viền đen.
+- Mắt to long lanh với điểm sáng, má hồng, miệng nhỏ. Trên các thân màu tối, nét mặt được vẽ bằng màu sáng để vẫn đọc được.
 
 ## Mọi trait đều 1/1
 
@@ -55,10 +58,10 @@ Một số Body như Cosmic, Lava, Crystal, Leopard và Moo vẽ hoa văn theo s
 | | |
 |---|---|
 | Seed | `0x50555252` ("PURR") |
-| Provenance hash | `81603070a23568f491290704de98c28af47b29aa1f83b9578746d326f1b92c9e` |
-| SHA-256 của mosaic | `cb5409ae34207818ef504bc10bfbf3b0649d7c787c7fb7b4bc644872a5dad91b` |
+| Provenance hash | `2eaa1656821e6a7013625ca986ace5ad81e6d48368a76cb131587fa69285e41e` |
+| SHA-256 của mosaic | `8b673e1d13901fec19cddc19ea8873632c0baee5552355f23456452d0449bb7b` |
 
-Provenance hash là `sha256` của chuỗi nối các `sha256` dạng hex của từng Purrl, theo thứ tự #0 → #19. Mỗi `sha256` được tính trên 2.304 byte RGBA thô (24×24×4). Hash mosaic được tính trên pixel RGBA của `dist/purrls.png` (120×96, 5 con mỗi hàng). Trang gallery có nút xác minh, bấm vào sẽ dựng lại cả bộ ngay trong trình duyệt và so với hai hash này.
+Provenance hash là `sha256` của chuỗi nối các `sha256` dạng hex của từng Purrl, theo thứ tự #0 → #19. Mỗi `sha256` được tính trên 4.096 byte RGBA thô (32×32×4). Hash mosaic được tính trên pixel RGBA của `dist/purrls.png` (160×128, 5 con mỗi hàng). Trang gallery có nút xác minh, bấm vào sẽ dựng lại cả bộ ngay trong trình duyệt và so với hai hash này.
 
 ## Cách chạy
 
