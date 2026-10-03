@@ -8,7 +8,7 @@
 html, body { height: 100%; margin: 0; background: #3f8a3a; overflow: hidden; }
 #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; image-rendering: pixelated; cursor: grab; }
 </style>
-<canvas id="game" tabindex="0" aria-label="Purrl Valley, game nông trại pixel. WASD hoặc bấm để đi, kéo để nhìn quanh, cuộn để phóng to."></canvas>
+<canvas id="game" tabindex="0" aria-label="Purrl Valley, a pixel farming game. Use WASD or tap to walk, drag to look around, scroll to zoom."></canvas>
 <script>
 'use strict';
 // ================= rules (play money) =================
@@ -18,25 +18,25 @@ const CLAIM_CD = 10 * 60 * 1000, CLAIM_FEE = 0.05;
 const POOL0 = { purr: 100000, usdt: 10000 }, SWAP_FEE = 0.003;
 // crops: row on the Spring Crops sheet; stages are columns 0-5, the harvested item is column 7
 const CROPS = {
-  strawberry:  { name: 'Dâu tây',  row: 1,  grow: 1 * 60e3,  yield: 9,   seed: 6 },
-  carrot:      { name: 'Cà rốt',   row: 9,  grow: 2 * 60e3,  yield: 16,  seed: 10 },
-  potato:      { name: 'Khoai tây', row: 5, grow: 4 * 60e3,  yield: 30,  seed: 18 },
-  cabbage:     { name: 'Bắp cải',  row: 15, grow: 8 * 60e3,  yield: 52,  seed: 30 },
-  cauliflower: { name: 'Súp lơ',   row: 17, grow: 15 * 60e3, yield: 105, seed: 60 },
+  strawberry:  { name: 'Strawberry',  row: 1,  grow: 1 * 60e3,  yield: 9,   seed: 6 },
+  carrot:      { name: 'Carrot',   row: 9,  grow: 2 * 60e3,  yield: 16,  seed: 10 },
+  potato:      { name: 'Potato', row: 5, grow: 4 * 60e3,  yield: 30,  seed: 18 },
+  cabbage:     { name: 'Cabbage',  row: 15, grow: 8 * 60e3,  yield: 52,  seed: 30 },
+  cauliflower: { name: 'Cauliflower',   row: 17, grow: 15 * 60e3, yield: 105, seed: 60 },
 };
-const MATS = { wood: { name: 'Gỗ', price: 8 }, stone: { name: 'Đá', price: 12 } };
+const MATS = { wood: { name: 'Wood', price: 8 }, stone: { name: 'Stone', price: 12 } };
 const HOUSE = [null,
-  { name: 'Nhà gỗ nhỏ',  rate: 30,  cost: { wood: 10, stone: 8 },  spr: 'house1' },
-  { name: 'Nhà hai gian', rate: 60,  cost: { wood: 20, stone: 16 }, spr: 'house2' },
-  { name: 'Trang trại',  rate: 100, cost: { wood: 40, stone: 30 }, spr: 'house3' },
+  { name: 'Cottage',  rate: 30,  cost: { wood: 10, stone: 8 },  spr: 'house1' },
+  { name: 'Farmhouse', rate: 60,  cost: { wood: 20, stone: 16 }, spr: 'house2' },
+  { name: 'Manor',  rate: 100, cost: { wood: 40, stone: 30 }, spr: 'house3' },
 ];
 
 // ================= state =================
 let db = null, user = null, me = null, canWrite = null, signedIn = null;
 let land = {}, farms = {}, pool = null, names = {};
 let sel = null, busy = false, hover = null;
-const ui = { win: null, seed: 'strawberry', toast: null, toastAt: 0 };
-const fmt = (n, d = 1) => Number(n).toLocaleString('vi-VN', { minimumFractionDigits: d, maximumFractionDigits: d });
+const ui = { win: null, seed: 'strawberry', toast: null, toastAt: 0, title: true };
+const fmt = (n, d = 1) => Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 const mins = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 const key = (x, y) => x + '_' + y;
 const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -220,11 +220,11 @@ function button(x, y, w, h, label, fn, o = {}) {
 }
 function drawHUD(now) {
   const f = myFarm(), pad = S * 7, lh = F + S * 2;
-  const rows = f ? [['coin', fmt(f.purr) + ' PURR'], ['usdt', fmt(f.usdt, 2) + ' USDT'], ['box', fmt(pendingNow(f, now), 2) + '  +' + houseRate(f) + '/giờ']] : [['coin', 'PURR $' + fmt(price(), 4)]];
+  const rows = f ? [['coin', fmt(f.purr) + ' PURR'], ['usdt', fmt(f.usdt, 2) + ' USDT'], ['box', fmt(pendingNow(f, now), 2) + '  +' + houseRate(f) + '/h']] : [['coin', 'PURR $' + fmt(price(), 4)]];
   const w = Math.max(...rows.map(([, s]) => tw(s))) + 16 * S + pad * 2 + S * 3, h = rows.length * lh + pad * 2 + (f ? lh + S * 8 : 0);
   panel(S * 4, S * 4, w, h);
   rows.forEach(([k, s], i) => { const y = S * 4 + pad + i * lh; if (k === 'coin') icon('coin', Math.floor(now / 140) % 6, 0, S * 4 + pad, y + (lh - 16 * S) / 2 - S); else ic(k, S * 4 + pad, y + (lh - 16 * S) / 2 - S); text(s, S * 4 + pad + 16 * S + S * 3, y); });
-  if (f) { const left = CLAIM_CD - (now - (f.lastClaim || 0)); button(S * 4 + pad, S * 4 + pad + rows.length * lh + S * 2, w - pad * 2, lh + S * 4, left > 0 ? 'Claim sau ' + mins(left) : 'Claim PURR', actions.claim, { enabled: left <= 0, go: left <= 0 }); }
+  if (f) { const left = CLAIM_CD - (now - (f.lastClaim || 0)); button(S * 4 + pad, S * 4 + pad + rows.length * lh + S * 2, w - pad * 2, lh + S * 4, left > 0 ? 'Claim in ' + mins(left) : 'Claim PURR', actions.claim, { enabled: left <= 0, go: left <= 0 }); }
   // seed bar
   if (f) {
     const ks = Object.keys(CROPS), slot = 16 * S + S * 8, n = ks.length + 2, bw = n * (slot + S * 2) + S * 14;
@@ -243,7 +243,7 @@ function drawHUD(now) {
     });
   }
   // menu
-  const menu = [['Cửa hàng', 'shop', 'bag'], ['Chợ', 'market', 'pile'], ['Xếp hạng', 'board', 'book'], ['?', 'help', null]];
+  const menu = [['Shop', 'shop', 'bag'], ['Market', 'market', 'pile'], ['Leaderboard', 'board', 'book'], ['?', 'help', null]];
   const narrow = vw < 760, bh = 16 * S + S * 8;
   let x = vw - S * 4;
   menu.slice().reverse().forEach(([label, win, k], i) => {
@@ -261,7 +261,7 @@ function drawHUD(now) {
 }
 function goHome() {
   const mine = Object.keys(land).filter((k) => land[k].owner === me);
-  if (!mine.length) { toast('Bạn chưa có đất. Ra quảng trường.'); player.tx = (PLAZA[0] + 10.5) * TS; player.ty = (PLAZA[1] + 14) * TS; cam.follow = true; return; }
+  if (!mine.length) { toast('No land yet. Heading to the square.'); player.tx = (PLAZA[0] + 10.5) * TS; player.ty = (PLAZA[1] + 14) * TS; cam.follow = true; return; }
   const [x, y] = mine[0].split('_').map(Number); player.tx = (x + 5) * TS; player.ty = (y + LOT + .5) * TS; cam.follow = true; sel = mine[0];
 }
 function drawLotCard(now) {
@@ -269,25 +269,25 @@ function drawLotCard(now) {
   const f = myFarm(), l = land[sel], pad = S * 8, lh = F + S;
   let rows = [], btns = [];
   const p = l && farms[l.owner] && farms[l.owner].plots && farms[l.owner].plots[sel];
-  if (!l) { const pr = landPrice(); rows = [`Lô #${lotNo(sel)} · đang bán`, `Giá ${fmt(pr, 0)} PURR`]; btns = [['Mua lô này', actions.buyLand, !!f && f.purr >= pr, true]]; }
+  if (!l) { const pr = landPrice(); rows = [`Plot #${lotNo(sel)} · For sale`, `Price ${fmt(pr, 0)} PURR`]; btns = [['Buy this plot', actions.buyLand, !!f && f.purr >= pr, true]]; }
   else {
     const mine = l.owner === me;
-    rows = [`Lô #${lotNo(sel)} · ${mine ? 'của bạn' : (names[l.owner] || 'người khác')}`];
+    rows = [`Plot #${lotNo(sel)} · ${mine ? 'Yours' : (names[l.owner] || 'Another farmer')}`];
     if (!p || p.kind === 'empty') {
-      rows.push('Đất trống');
+      rows.push('Empty plot');
       if (mine) {
         const c = CROPS[ui.seed], n = (f.inv || {})[ui.seed] || 0;
-        btns.push([`Gieo ${c.name} (${n})`, () => actions.plant({ crop: ui.seed }), n > 0, true]);
-        btns.push([`Xây ${HOUSE[1].name}`, actions.build, hasCost(f, HOUSE[1].cost)]);
-        rows.push(`Nhà: ${HOUSE[1].cost.wood} gỗ, ${HOUSE[1].cost.stone} đá · ${HOUSE[1].rate}/giờ`);
+        btns.push([`Plant ${c.name} (${n})`, () => actions.plant({ crop: ui.seed }), n > 0, true]);
+        btns.push([`Build ${HOUSE[1].name}`, actions.build, hasCost(f, HOUSE[1].cost)]);
+        rows.push(`House: ${HOUSE[1].cost.wood} wood, ${HOUSE[1].cost.stone} stone · ${HOUSE[1].rate}/h`);
       }
     } else if (p.kind === 'crop') {
       const c = CROPS[p.crop], t = Math.min(1, (now - p.plantedAt) / c.grow);
-      rows.push(`${c.name}: ${t >= 1 ? 'đã chín, +' + c.yield + ' PURR' : 'còn ' + mins(c.grow * (1 - t))}`);
-      if (mine) btns.push(['Thu hoạch', actions.harvest, t >= 1, true]);
+      rows.push(`${c.name}: ${t >= 1 ? 'ready, +' + c.yield + ' PURR' : mins(c.grow * (1 - t)) + ' left'}`);
+      if (mine) btns.push(['Harvest', actions.harvest, t >= 1, true]);
     } else if (p.kind === 'house') {
-      const H = HOUSE[p.level]; rows.push(`${H.name} · ${H.rate} PURR/giờ`);
-      if (mine && p.level < 3) { const N = HOUSE[p.level + 1]; rows.push(`Nâng: ${N.cost.wood} gỗ, ${N.cost.stone} đá`); btns.push([`Nâng lên ${N.name}`, actions.upgrade, hasCost(f, N.cost)]); }
+      const H = HOUSE[p.level]; rows.push(`${H.name} · ${H.rate} PURR/h`);
+      if (mine && p.level < 3) { const N = HOUSE[p.level + 1]; rows.push(`Upgrade: ${N.cost.wood} wood, ${N.cost.stone} stone`); btns.push([`Upgrade to ${N.name}`, actions.upgrade, hasCost(f, N.cost)]); }
     }
   }
   if (!signedIn) btns = [];
@@ -311,50 +311,66 @@ function windowFrame(title, w, h) {
 function drawWindow() {
   const f = myFarm(), lh = F + S * 2, bh = 16 * S + S * 4;
   if (ui.win === 'shop') {
-    const list = [...Object.entries(CROPS).map(([k, c]) => [k, 'Hạt ' + c.name.toLowerCase(), c.seed, (x, y) => spr(cx, 'crops', 0, c.row * 16, 16, 16, x, y, S)]), ...Object.entries(MATS).map(([k, m]) => [k, m.name, m.price, (x, y) => ic(k, x, y)])];
-    const [x, y, w] = windowFrame('Cửa hàng', 15 * 16 * S, list.length * (bh + S * 3) + 16 * S * 2.4);
+    const list = [...Object.entries(CROPS).map(([k, c]) => [k, c.name + ' seeds', c.seed, (x, y) => spr(cx, 'crops', 0, c.row * 16, 16, 16, x, y, S)]), ...Object.entries(MATS).map(([k, m]) => [k, m.name, m.price, (x, y) => ic(k, x, y)])];
+    const [x, y, w] = windowFrame('Shop', 17 * 16 * S, list.length * (bh + S * 3) + 16 * S * 2.4);
     list.forEach(([k, name, pr, draw], i) => {
       const yy = y + i * (bh + S * 3);
       draw(x, yy + (bh - 16 * S) / 2); text(name, x + 16 * S + S * 4, yy + (bh - F) / 2);
-      text(pr + ' PURR', x + w * .64, yy + (bh - F) / 2, { align: 'right', color: '#a2401f' });
-      button(x + w * .67, yy, w * .155, bh, '+1', () => actions.buy({ item: k, qty: 1, price: pr }), { enabled: !!f && f.purr >= pr });
-      button(x + w * .845, yy, w * .155, bh, '+5', () => actions.buy({ item: k, qty: 5, price: pr }), { enabled: !!f && f.purr >= pr * 5 });
+      text(pr + ' PURR', x + w * .7, yy + (bh - F) / 2, { align: 'right', color: '#a2401f' });
+      button(x + w * .72, yy, w * .135, bh, '+1', () => actions.buy({ item: k, qty: 1, price: pr }), { enabled: !!f && f.purr >= pr });
+      button(x + w * .865, yy, w * .135, bh, '+5', () => actions.buy({ item: k, qty: 5, price: pr }), { enabled: !!f && f.purr >= pr * 5 });
     });
   }
   if (ui.win === 'market') {
-    const p = pool || POOL0, [x, y, w] = windowFrame('Chợ PURR / USDT', 14 * 16 * S, 10 * 16 * S);
-    text(`Giá  $${fmt(price(), 4)}`, x, y, { color: '#a2401f' });
+    const p = pool || POOL0, [x, y, w] = windowFrame('PURR / USDT Market', 14 * 16 * S, 10 * 16 * S);
+    text(`Price  $${fmt(price(), 4)}`, x, y, { color: '#a2401f' });
     text(`Pool ${fmt(p.purr, 0)} PURR · ${fmt(p.usdt, 0)} USDT`, x, y + lh);
     const hs = (p.hist || []).map((d) => d.p), gy = y + lh * 2 + S * 4, gh = 16 * S * 1.6;
     if (hs.length > 1) { const lo = Math.min(...hs), hi = Math.max(...hs), sp = hi - lo || hi * .01; cx.fillStyle = hs[hs.length - 1] >= hs[0] ? '#3f8a3a' : '#c0392b'; hs.forEach((v, i) => cx.fillRect(Math.round(x + i / (hs.length - 1) * (w - S * 2)), Math.round(gy + gh - (v - lo) / sp * gh), S * 2, S * 2)); }
-    else text('Biểu đồ hiện ra sau vài lượt giao dịch.', x, gy + gh / 3, { size: Math.round(F * .85) });
+    else text('The chart appears after a few trades.', x, gy + gh / 3, { size: Math.round(F * .85) });
     const by = gy + gh + S * 8, bw = (w - S * 6) / 4;
-    text('Bán PURR', x, by); ['10', '100', '1000', 'Hết'].forEach((v, i) => button(x + i * (bw + S * 2), by + lh, bw, bh, v, () => swap('sell', v === 'Hết' ? (f ? f.purr : 0) : +v), { enabled: !!f && f.purr > 0 }));
-    text('Mua PURR bằng USDT', x, by + lh + bh + S * 6); ['1', '10', '50', 'Hết'].forEach((v, i) => button(x + i * (bw + S * 2), by + 2 * lh + bh + S * 6, bw, bh, v === 'Hết' ? v : '$' + v, () => swap('buy', v === 'Hết' ? (f ? f.usdt : 0) : +v), { enabled: !!f && f.usdt > 0, go: true }));
+    text('Sell PURR', x, by); ['10', '100', '1000', 'Max'].forEach((v, i) => button(x + i * (bw + S * 2), by + lh, bw, bh, v, () => swap('sell', v === 'Max' ? (f ? f.purr : 0) : +v), { enabled: !!f && f.purr > 0 }));
+    text('Buy PURR with USDT', x, by + lh + bh + S * 6); ['1', '10', '50', 'Max'].forEach((v, i) => button(x + i * (bw + S * 2), by + 2 * lh + bh + S * 6, bw, bh, v === 'Max' ? v : '$' + v, () => swap('buy', v === 'Max' ? (f ? f.usdt : 0) : +v), { enabled: !!f && f.usdt > 0, go: true }));
   }
   if (ui.win === 'board') {
     const ids = Object.keys(farms), rows = ids.map((id) => [id, farms[id].earned || 0, Object.keys(farms[id].plots || {}).length]).sort((a, b) => b[1] - a[1]).slice(0, 10);
-    const [x, y, w] = windowFrame('Bảng nông dân', 13 * 16 * S, Math.max(4, rows.length + 2) * lh + 16 * S * 2.4);
-    if (!rows.length) text('Chưa có ai vào làng.', x, y);
-    rows.forEach(([id, e, n], i) => { const c = id === me ? '#a2401f' : '#4a2a17'; text(`${i + 1}. ${id === me ? 'Bạn' : (names[id] || 'Nông dân')} · ${n} lô`, x, y + i * lh, { color: c }); text(fmt(e, 0), x + w, y + i * lh, { align: 'right', color: c }); });
+    const [x, y, w] = windowFrame('Leaderboard', 13 * 16 * S, Math.max(4, rows.length + 2) * lh + 16 * S * 2.4);
+    if (!rows.length) text('No farmers yet.', x, y);
+    rows.forEach(([id, e, n], i) => { const c = id === me ? '#a2401f' : '#4a2a17'; text(`${i + 1}. ${id === me ? 'You' : (names[id] || 'Farmer')} · ${n} plots`, x, y + i * lh, { color: c }); text(fmt(e, 0), x + w, y + i * lh, { align: 'right', color: c }); });
   }
   if (ui.win === 'help') {
-    const tips = ['WASD/mũi tên để đi, hoặc bấm vào nơi muốn tới.', 'Kéo để nhìn quanh, cuộn hoặc chụm tay để zoom.', 'Bấm lô có biển gỗ để mua bằng PURR.', 'Mua hạt, gỗ, đá ở Cửa hàng.', 'Chọn hạt ở thanh dưới, bấm lô của bạn, Gieo.', 'Cây chín thì Thu hoạch, PURR vào kho.', 'Nhà đào PURR theo giờ, nâng cấp để đào nhiều hơn.', 'Mỗi 10 phút Claim kho về ví, phí 5%.', 'Coin trong game là coin ảo để chơi thử.', 'Đồ hoạ: Farm RPG Tiny Asset Pack - EmanuelleDev.'];
-    const [x, y] = windowFrame('Cách chơi', 17 * 16 * S, tips.length * lh + 16 * S * 2.4);
+    const tips = ['Walk with WASD or the arrow keys, or tap where to go.', 'Drag to look around. Scroll or pinch to zoom.', 'Tap a plot with a wooden sign to buy it with PURR.', 'Buy seeds, wood and stone in the Shop.', 'Pick a seed in the bar, tap your plot, then Plant.', 'Harvest ripe crops. PURR goes to your storage.', 'Houses mine PURR every hour. Upgrade to mine more.', 'Claim storage to your wallet every 10 min (5% fee).', 'PURR and USDT here are play money for testing.', 'Art: Farm RPG Tiny Asset Pack by EmanuelleDev.'];
+    const [x, y] = windowFrame('How to play', 17 * 16 * S, tips.length * lh + 16 * S * 2.4);
     tips.forEach((t, i) => text(t, x, y + i * lh, { size: Math.round(F * .9) }));
   }
 }
 function drawModal() {
   let msg = null, btn = null;
-  if (signedIn === false) msg = ['Đăng nhập Claude để chơi.', 'Bạn vẫn đi dạo và xem làng được.'];
-  else if (signedIn && canWrite === false) msg = ['Bạn đang ở quyền chỉ xem.', 'Nhờ chủ trang cấp quyền Contributor.'];
-  else if (signedIn && me && !myFarm()) { msg = ['Chào nông dân mới!', `Nhận ${START.purr} PURR và ${START.usdt} USDT để bắt đầu.`]; btn = ['Nhận gói khởi đầu', actions.start]; }
+  if (signedIn === false) msg = ['Sign in to Claude to play.', 'You can still walk around the village.'];
+  else if (signedIn && canWrite === false) msg = ['You have view-only access.', 'Ask the owner for Contributor access.'];
+  else if (signedIn && me && !myFarm()) { msg = ['Welcome, new farmer!', `Claim ${START.purr} PURR and ${START.usdt} USDT to get started.`]; btn = ['Claim starter pack', actions.start]; }
   if (!msg) return;
   const lh = F + S * 2, w = Math.min(vw - S * 8, Math.max(...msg.map((m) => tw(m))) + S * 28), h = msg.length * lh + (btn ? 16 * S + S * 12 : 0) + S * 20;
   const x = vw / 2 - w / 2, y = vh * .16;
   panel(x, y, w, h);
   msg.forEach((m, i) => text(m, vw / 2, y + S * 10 + i * lh, { align: 'center', color: i ? '#4a2a17' : '#a2401f' }));
   if (btn) button(x + S * 10, y + S * 10 + msg.length * lh, w - S * 20, 16 * S + S * 4, btn[0], btn[1], { go: true });
+}
+function drawTitle(t) {
+  cx.fillStyle = 'rgba(30,18,10,.45)'; cx.fillRect(0, 0, vw, vh); blocks.push([0, 0, vw, vh]); hits.push({ x: 0, y: 0, w: vw, h: vh, fn: null });
+  const maxW = vw - S * 8, pad = S * 12;
+  let big = Math.round(F * 2.6); while (big > F && tw('PURRL VALLEY', big) + pad * 2 > maxW) big -= 2;
+  const sub = 'A cozy pixel farming village', subSize = tw(sub) + pad * 2 > maxW ? Math.round(F * .8) : F;
+  const bh = 16 * S + S * 6, w = Math.min(maxW, Math.max(tw('PURRL VALLEY', big), tw(sub, subSize)) + pad * 2);
+  const h = pad + 16 * S + S * 4 + big + S * 2 + subSize + S * 10 + bh + S * 6 + F + pad;
+  const x = vw / 2 - w / 2; let y = vh / 2 - h / 2;
+  panel(x, y, w, h); y += pad;
+  icon('coin', Math.floor(t / 140) % 6, 0, vw / 2 - 8 * S, y); y += 16 * S + S * 4;
+  text('PURRL VALLEY', vw / 2, y, { align: 'center', size: big, color: '#a2401f' }); y += big + S * 2;
+  text(sub, vw / 2, y, { align: 'center', size: subSize }); y += subSize + S * 10;
+  const bw = Math.min(w - pad * 2, 6 * 16 * S);
+  button(vw / 2 - bw / 2, y, bw, bh, 'Play', () => { ui.title = false; }, { go: true }); y += bh + S * 6;
+  text('Art by EmanuelleDev', vw / 2, y, { align: 'center', size: Math.round(F * .75), color: '#8a6a4a' });
 }
 function drawToast(now) {
   if (!ui.toast || now - ui.toastAt > 3200) return;
@@ -388,7 +404,7 @@ function frame(t) {
     const box = (k, col, w) => { const [x, y] = k.split('_').map(Number), sx = (x * TS - cam.x) * cam.z + vw / 2, sy = (y * TS - cam.y) * cam.z + vh / 2, s = LOT * TS * cam.z; cx.strokeStyle = col; cx.lineWidth = w; cx.strokeRect(sx + w / 2, sy + w / 2, s - w, s - w); };
     if (hover && hover !== sel) box(hover, 'rgba(255,243,223,.8)', 2);
     if (sel) { box(sel, '#3b1f12', 5); box(sel, Math.floor(t / 380) % 2 ? '#fff3df' : '#f2c14e', 3); }
-    drawHUD(now); drawLotCard(now); drawModal(); drawWindow(); drawToast(t);
+    if (ui.title) drawTitle(t); else { drawHUD(now); drawLotCard(now); drawModal(); drawWindow(); drawToast(t); }
   }
   requestAnimationFrame(frame);
 }
@@ -429,7 +445,7 @@ cv.addEventListener('pointerup', endPtr); cv.addEventListener('pointercancel', e
 cv.addEventListener('pointerleave', () => { hover = null; mouse.x = mouse.y = -1; });
 cv.addEventListener('wheel', (e) => { e.preventDefault(); const r = cv.getBoundingClientRect(); zoomAt(Math.exp(-e.deltaY * .0016), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
 const MOVE = ['w', 'a', 's', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Shift'];
-window.addEventListener('keydown', (e) => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; if (MOVE.includes(k)) { keys.add(k); if (k.startsWith('Arrow')) e.preventDefault(); } if (k === '+' || k === '=') zoomAt(1.25, vw / 2, vh / 2); if (k === '-') zoomAt(.8, vw / 2, vh / 2); if (k === 'Escape') { sel = null; ui.win = null; } });
+window.addEventListener('keydown', (e) => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; if (MOVE.includes(k)) { keys.add(k); if (k.startsWith('Arrow')) e.preventDefault(); } if (k === '+' || k === '=') zoomAt(1.25, vw / 2, vh / 2); if (k === '-') zoomAt(.8, vw / 2, vh / 2); if (k === 'Escape') { sel = null; ui.win = null; } if (k === 'Enter') ui.title = false; });
 window.addEventListener('keyup', (e) => keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key));
 window.addEventListener('blur', () => keys.clear());
 
@@ -439,41 +455,41 @@ async function saveFarm(f) { await db.doc('farms/' + me).set(f); farms[me] = f; 
 const fail = (m) => { const e = new Error(m); e.userMsg = m; throw e; };
 async function act(fn) {
   if (busy) return;
-  if (!db || !me) { toast('Đăng nhập để chơi.'); return; }
+  if (!db || !me) { toast('Sign in to play.'); return; }
   busy = true;
-  try { await fn(); } catch (e) { toast(e && e.userMsg ? e.userMsg : 'Không lưu được. Thử lại sau giây lát.'); console.error(e); }
+  try { await fn(); } catch (e) { toast(e && e.userMsg ? e.userMsg : 'Could not save. Try again in a moment.'); console.error(e); }
   busy = false;
 }
-async function lease(ref) { for (let i = 0; i < 6; i++) { const r = await ref.acquire({ holder: me, ttlMs: 4000 }); if (r.acquired) return; await new Promise((ok) => setTimeout(ok, 400 + Math.random() * 400)); } fail('Đang có người giao dịch, thử lại sau.'); }
+async function lease(ref) { for (let i = 0; i < 6; i++) { const r = await ref.acquire({ holder: me, ttlMs: 4000 }); if (r.acquired) return; await new Promise((ok) => setTimeout(ok, 400 + Math.random() * 400)); } fail('Someone else is trading. Try again shortly.'); }
 const actions = {
-  start: () => act(async () => { const now = Date.now(); await saveFarm({ purr: START.purr, usdt: START.usdt, pending: 0, accrueAt: now, lastClaim: 0, earned: 0, inv: {}, plots: {}, createdAt: now }); toast('Đã nhận gói khởi đầu. Bấm một lô có biển gỗ.'); }),
+  start: () => act(async () => { const now = Date.now(); await saveFarm({ purr: START.purr, usdt: START.usdt, pending: 0, accrueAt: now, lastClaim: 0, earned: 0, inv: {}, plots: {}, createdAt: now }); toast('Starter pack claimed. Tap a plot with a wooden sign.'); }),
   buyLand: () => act(async () => {
     const k = sel, pr = landPrice(), f = accrued(myFarm());
-    if (!(k in PLOT_INDEX)) fail('Lô này không bán.'); if (f.purr < pr) fail('Không đủ PURR.');
+    if (!(k in PLOT_INDEX)) fail('This plot is not for sale.'); if (f.purr < pr) fail('Not enough PURR.');
     const ref = db.doc('land/' + k); await lease(ref);
-    const cur = await ref.get(); if (cur.exists && cur.data().owner) fail('Lô này vừa có người mua.');
+    const cur = await ref.get(); if (cur.exists && cur.data().owner) fail('Someone just bought this plot.');
     await ref.set({ owner: me, at: Date.now() }); land[k] = { owner: me };
-    f.purr -= pr; f.plots[k] = { kind: 'empty' }; await saveFarm(f); toast('Đã mua lô #' + lotNo(k) + ' giá ' + fmt(pr, 0) + ' PURR.');
+    f.purr -= pr; f.plots[k] = { kind: 'empty' }; await saveFarm(f); toast('Bought plot #' + lotNo(k) + ' for ' + fmt(pr, 0) + ' PURR.');
   }),
-  buy: (d) => act(async () => { const q = +d.qty, f = accrued(myFarm()), pr = CROPS[d.item] ? CROPS[d.item].seed : MATS[d.item].price; if (f.purr < pr * q) fail('Không đủ PURR.'); f.purr -= pr * q; f.inv[d.item] = (f.inv[d.item] || 0) + q; await saveFarm(f); toast(`+${q} ${CROPS[d.item] ? 'hạt ' + CROPS[d.item].name.toLowerCase() : MATS[d.item].name}`); }),
-  build: () => act(async () => { const f = accrued(myFarm()), c = HOUSE[1].cost; if (!hasCost(f, c)) fail('Thiếu gỗ hoặc đá.'); f.inv.wood -= c.wood; f.inv.stone -= c.stone; f.plots[sel] = { kind: 'house', level: 1 }; await saveFarm(f); toast('Đã xây nhà. Nhà bắt đầu đào PURR.'); }),
-  upgrade: () => act(async () => { const f = accrued(myFarm()), p = f.plots[sel], c = HOUSE[p.level + 1].cost; if (!hasCost(f, c)) fail('Thiếu gỗ hoặc đá.'); f.inv.wood -= c.wood; f.inv.stone -= c.stone; p.level += 1; await saveFarm(f); toast('Đã nâng lên ' + HOUSE[p.level].name + '.'); }),
-  plant: (d) => act(async () => { const f = accrued(myFarm()); if (!(f.inv[d.crop] > 0)) fail('Hết hạt giống.'); f.inv[d.crop] -= 1; f.plots[sel] = { kind: 'crop', crop: d.crop, plantedAt: Date.now() }; await saveFarm(f); }),
-  harvest: () => act(async () => { const f = accrued(myFarm()), p = f.plots[sel], c = CROPS[p.crop]; if (Date.now() - p.plantedAt < c.grow) fail('Chưa chín.'); f.pending += c.yield; f.plots[sel] = { kind: 'empty' }; await saveFarm(f); toast('+' + c.yield + ' PURR vào kho.'); }),
-  claim: () => act(async () => { const f = accrued(myFarm()), now = Date.now(); if (now - (f.lastClaim || 0) < CLAIM_CD) fail('Chưa đến giờ claim.'); if (f.pending < .01) fail('Kho đang trống.'); const got = f.pending * (1 - CLAIM_FEE); f.purr += got; f.earned = (f.earned || 0) + got; f.pending = 0; f.lastClaim = now; await saveFarm(f); toast('Đã claim ' + fmt(got, 2) + ' PURR.'); }),
+  buy: (d) => act(async () => { const q = +d.qty, f = accrued(myFarm()), pr = CROPS[d.item] ? CROPS[d.item].seed : MATS[d.item].price; if (f.purr < pr * q) fail('Not enough PURR.'); f.purr -= pr * q; f.inv[d.item] = (f.inv[d.item] || 0) + q; await saveFarm(f); toast(`+${q} ${CROPS[d.item] ? CROPS[d.item].name + ' seeds' : MATS[d.item].name}`); }),
+  build: () => act(async () => { const f = accrued(myFarm()), c = HOUSE[1].cost; if (!hasCost(f, c)) fail('Not enough wood or stone.'); f.inv.wood -= c.wood; f.inv.stone -= c.stone; f.plots[sel] = { kind: 'house', level: 1 }; await saveFarm(f); toast('House built. It is now mining PURR.'); }),
+  upgrade: () => act(async () => { const f = accrued(myFarm()), p = f.plots[sel], c = HOUSE[p.level + 1].cost; if (!hasCost(f, c)) fail('Not enough wood or stone.'); f.inv.wood -= c.wood; f.inv.stone -= c.stone; p.level += 1; await saveFarm(f); toast('Upgraded to ' + HOUSE[p.level].name + '.'); }),
+  plant: (d) => act(async () => { const f = accrued(myFarm()); if (!(f.inv[d.crop] > 0)) fail('Out of seeds.'); f.inv[d.crop] -= 1; f.plots[sel] = { kind: 'crop', crop: d.crop, plantedAt: Date.now() }; await saveFarm(f); }),
+  harvest: () => act(async () => { const f = accrued(myFarm()), p = f.plots[sel], c = CROPS[p.crop]; if (Date.now() - p.plantedAt < c.grow) fail('Not ready yet.'); f.pending += c.yield; f.plots[sel] = { kind: 'empty' }; await saveFarm(f); toast('+' + c.yield + ' PURR added to storage.'); }),
+  claim: () => act(async () => { const f = accrued(myFarm()), now = Date.now(); if (now - (f.lastClaim || 0) < CLAIM_CD) fail('Claim is not ready yet.'); if (f.pending < .01) fail('Storage is empty.'); const got = f.pending * (1 - CLAIM_FEE); f.purr += got; f.earned = (f.earned || 0) + got; f.pending = 0; f.lastClaim = now; await saveFarm(f); toast('Claimed ' + fmt(got, 2) + ' PURR.'); }),
 };
 function swap(dir, v) {
   v = Math.floor(v * 100) / 100; if (!(v > 0)) return;
   return act(async () => {
     const f = accrued(myFarm());
-    if (dir === 'sell' && f.purr < v) fail('Không đủ PURR.'); if (dir === 'buy' && f.usdt < v) fail('Không đủ USDT.');
+    if (dir === 'sell' && f.purr < v) fail('Not enough PURR.'); if (dir === 'buy' && f.usdt < v) fail('Not enough USDT.');
     const ref = db.doc('market/pool'); await lease(ref);
     const s = await ref.get(), p = s.exists ? clone(s.data()) : { ...POOL0, hist: [] }; let out;
     if (dir === 'sell') { out = swapOut(p.purr, p.usdt, v); p.purr += v; p.usdt -= out; f.purr -= v; f.usdt += out; }
     else { out = swapOut(p.usdt, p.purr, v); p.usdt += v; p.purr -= out; f.usdt -= v; f.purr += out; }
     p.hist = [...(p.hist || []), { t: Date.now(), p: p.usdt / p.purr }].slice(-60);
     await ref.set(p); pool = p; await saveFarm(f);
-    toast(dir === 'sell' ? `Bán ${fmt(v, 2)} PURR → ${fmt(out, 2)} USDT` : `Mua ${fmt(out, 2)} PURR bằng ${fmt(v, 2)} USDT`);
+    toast(dir === 'sell' ? `Sold ${fmt(v, 2)} PURR for ${fmt(out, 2)} USDT` : `Bought ${fmt(out, 2)} PURR for ${fmt(v, 2)} USDT`);
   });
 }
 
