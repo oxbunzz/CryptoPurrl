@@ -71,6 +71,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid #3d6fff; outline-
 input[type=number] { font: 500 15px var(--mono); width: 100%; min-width: 0; padding: 7px 9px; border: 2px solid var(--ink); background: #fff; color: var(--ink); }
 .shop { display: grid; grid-template-columns: 1fr auto auto; gap: 6px 8px; align-items: center; font-size: 14px; }
 .shop .p { font-family: var(--mono); color: #b06d0e; }
+.ico { image-rendering: pixelated; width: 24px; height: 24px; vertical-align: -7px; margin-right: 6px; }
+.credit { font-size: 12px; color: var(--muted); margin: 0; }
 .bar { height: 10px; border: 2px solid var(--ink); background: #fff; }
 .bar i { display: block; height: 100%; background: var(--grass); }
 .note { font-size: 13px; color: var(--muted); margin: 0; }
@@ -120,6 +122,7 @@ svg.spark { width: 100%; height: 54px; display: block; }
           <li>PURR làm ra nằm ở mục Đang đào. Cứ 10 phút được claim một lần, phí claim 5%.</li>
           <li>Bán PURR lấy USDT ở chợ, hoặc mua thêm PURR. Giá chạy theo cung cầu của mọi người chơi.</li>
         </ol>
+        <p class="credit">Đồ hoạ nông trại: <a href="https://trislin.itch.io/pixel-lands-farm" target="_blank" rel="noopener">Pixel Lands - Farm</a> của Trislin.</p>
       </section>
     </aside>
   </div>
@@ -135,16 +138,20 @@ const CLAIM_CD = 10 * 60 * 1000, CLAIM_FEE = 0.05;
 const POOL0 = { purr: 100000, usdt: 10000 };         // exchange pool opening reserves, price 0.1
 const SWAP_FEE = 0.003;
 const ITEMS = {
-  wood:    { name: 'Gỗ', price: 8 },
-  stone:   { name: 'Đá', price: 12 },
-  carrot:  { name: 'Hạt cà rốt', price: 10 },
-  tomato:  { name: 'Hạt cà chua', price: 25 },
-  pumpkin: { name: 'Hạt bí ngô', price: 60 },
+  wood:    { name: 'Gỗ', price: 8, icon: [4, 0] },
+  stone:   { name: 'Đá', price: 12, icon: [4, 1] },
+  wheat:   { name: 'Hạt lúa mì', price: 6, icon: [0, 6] },
+  turnip:  { name: 'Hạt củ cải', price: 10, icon: [8, 3] },
+  garlic:  { name: 'Hạt tỏi', price: 18, icon: [8, 7] },
+  corn:    { name: 'Hạt ngô', price: 30, icon: [8, 1] },
+  pumpkin: { name: 'Hạt bí ngô', price: 60, icon: [8, 5] },
 };
-const CROPS = {
-  carrot:  { name: 'Cà rốt',  grow: 2 * 60e3,  yield: 16 },
-  tomato:  { name: 'Cà chua', grow: 5 * 60e3,  yield: 42 },
-  pumpkin: { name: 'Bí ngô',  grow: 15 * 60e3, yield: 105 },
+const CROPS = {   // stages: [col, bottom row, height in tiles] on the objects sheet
+  wheat:   { name: 'Lúa mì', grow: 1 * 60e3,  yield: 9,   icon: [0, 7],  stages: [[1, 7, 1], [2, 7, 1], [3, 7, 1], [5, 7, 2], [7, 7, 2]] },
+  turnip:  { name: 'Củ cải', grow: 2 * 60e3,  yield: 16,  icon: [9, 3],  stages: [[10, 3, 1], [11, 3, 1], [12, 3, 1], [13, 3, 1], [14, 3, 2]] },
+  garlic:  { name: 'Tỏi',    grow: 4 * 60e3,  yield: 30,  icon: [9, 7],  stages: [[10, 7, 1], [11, 7, 1], [12, 7, 1], [13, 7, 1], [14, 7, 2]] },
+  corn:    { name: 'Ngô',    grow: 8 * 60e3,  yield: 52,  icon: [9, 1],  stages: [[10, 1, 1], [11, 1, 1], [12, 1, 1], [14, 1, 2], [15, 1, 2]] },
+  pumpkin: { name: 'Bí ngô', grow: 15 * 60e3, yield: 105, icon: [9, 5],  stages: [[10, 5, 1], [11, 5, 1], [12, 5, 1], [14, 5, 2], [15, 5, 2]] },
 };
 const HOUSE = [null,
   { name: 'Nhà gỗ',   rate: 30,  cost: { wood: 10, stone: 8 } },
@@ -184,7 +191,7 @@ function vnoise(x, y, s, seed) {
   const top = a + (b - a) * sm(fx), bot = c + (d - c) * sm(fx);
   return top + (bot - top) * sm(fy);
 }
-// lot kinds: 0 lawn (for sale), 1 pond, 2 grove, 4 town square
+// lot kinds: 0 lawn (for sale), 1 wild meadow, 2 shared wheat field, 4 town square
 const PK = new Uint8Array(N * N);
 const ter = (i, j) => (i < 0 || j < 0 || i >= N || j >= N ? 2 : PK[j * N + i]);
 const PLAZA = [N / 2 - 1, N / 2];
@@ -204,88 +211,54 @@ function lotOfPx(x, y) {
   const i = f(x), j = f(y); return i >= 0 && j >= 0 ? key(i, j) : null;
 }
 
-// ---- ground tile map: 0 grass, 1 path, 2 cobble, 3 water, 4 sand ----
+// ---- art: "Pixel Lands - Farm" demo by Trislin (trislin.itch.io/pixel-lands-farm) ----
+const SHEET = { ter: new Image(), obj: new Image() };
+SHEET.ter.src = 'data:image/png;base64,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';
+SHEET.obj.src = 'data:image/png;base64,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';
+const sheetsReady = Promise.all(Object.values(SHEET).map((im) => im.decode ? im.decode() : new Promise((ok) => (im.onload = ok))));
+function tile(g, sheet, c, r, x, y, h = 1) { g.drawImage(SHEET[sheet], c * 16, (r - h + 1) * 16, 16, 16 * h, Math.round(x), Math.round(y - (h - 1) * 16), 16, 16 * h); }
+// ground kinds per tile: 0 margin grass, 1 dirt path, 2 stone road, 3 lot
 const GT = new Uint8Array(WT * WT);
 (function () {
   const isMainRoad = (t) => { for (let b = 1; b < N / 4; b++) { const s = lotT0(b * 4) - 3; if (t >= s && t < s + 3) return true; } return false; };
   for (let ty = 0; ty < WT; ty++) for (let tx = 0; tx < WT; tx++) {
     let g = 0;
-    const inside = tx >= M && ty >= M && tx < WT - M && ty < WT - M;
-    if (inside) {
+    if (tx >= M - 1 && ty >= M - 1 && tx <= WT - M && ty <= WT - M) {
+      g = 1;
       if (isMainRoad(tx) || isMainRoad(ty)) g = 2;
-      else {
-        let li = -1, lj = -1;
-        for (let i = 0; i < N; i++) { const a = lotT0(i); if (tx >= a && tx < a + LT) li = i; if (ty >= a && ty < a + LT) lj = i; }
-        if (li < 0 || lj < 0) g = 1;
-      }
+      else { let li = -1, lj = -1; for (let i = 0; i < N; i++) { const a = lotT0(i); if (tx >= a && tx < a + LT) li = i; if (ty >= a && ty < a + LT) lj = i; } if (li >= 0 && lj >= 0) g = 3; }
     }
     GT[ty * WT + tx] = g;
   }
-  // town square paving covers its four lots and the paths between them
   const a = lotT0(PLAZA[0]), b = lotT0(PLAZA[1]) + LT;
   for (let ty = a; ty < b; ty++) for (let tx = a; tx < b; tx++) GT[ty * WT + tx] = 2;
 })();
 const gt = (tx, ty) => (tx < 0 || ty < 0 || tx >= WT || ty >= WT ? 0 : GT[ty * WT + tx]);
-
-const PAL = {
-  grass: [[92, 158, 49], [104, 173, 56], [115, 185, 65], [84, 146, 45]],
-  path: [[199, 154, 91], [185, 140, 80], [212, 169, 106], [168, 125, 71]],
-  cobble: [[176, 168, 152], [190, 182, 166], [160, 154, 142]], mortar: [104, 98, 88],
-  water: [[58, 127, 196], [75, 151, 214], [111, 182, 232]], foam: [191, 230, 251],
-  sand: [[227, 200, 138], [216, 185, 119]],
-};
 const world = document.createElement('canvas'); world.width = WPX; world.height = WPX;
 const wg = world.getContext('2d');
-function pondAt(px, py) {           // distance (in tiles) from a pond lot's centre, or 99
-  const k = lotOfPx(px, py); if (!k) return 99;
-  const [i, j] = k.split('_').map(Number); if (ter(i, j) !== 1) return 99;
-  const [x0, y0] = lotPx(i, j), cx = x0 + LPX / 2, cy = y0 + LPX / 2;
-  const ang = Math.atan2(py - cy, px - cx), wob = 1 + .12 * Math.sin(ang * 3 + i) + .08 * Math.sin(ang * 5 + j);
-  return Math.hypot(px - cx, py - cy) / TS / wob;
+const GRASS = () => [13, 0];
+function grassTile(tx, ty) { const r = hash(tx, ty, 7); return r < .1 ? [12, 0] : r < .17 ? [12, 1] : r < .23 ? [13, 1] : r < .3 ? [12, 2] : [13, 0]; }
+// a 6×6 block of the grass island (lot) or the tilled-soil island (field), edge pieces by position
+function islandTile(lx, ly, field) {
+  const ox = 8, oy = field ? 4 : 0, L = lx === 0, R = lx === LT - 1, T = ly === 0, B = ly === LT - 1;
+  if (T && L) return [ox, oy]; if (T && R) return [ox + 3, oy]; if (B && L) return [ox, oy + 3]; if (B && R) return [ox + 3, oy + 3];
+  if (T) return [ox + 1, oy]; if (B) return [ox + 1, oy + 3]; if (L) return [ox, oy + 1]; if (R) return [ox + 3, oy + 1];
+  return field ? [9, 5] : null;
 }
 function paintGround() {
-  const img = wg.createImageData(WPX, WPX), d = img.data;
-  for (let py = 0; py < WPX; py++) for (let px = 0; px < WPX; px++) {
-    const jx = Math.floor((hash(px >> 2, py >> 2, 5) - .5) * 5), jy = Math.floor((hash(py >> 2, px >> 2, 6) - .5) * 5);
-    let t = gt(Math.floor((px + jx) / TS), Math.floor((py + jy) / TS)), c;
-    const r = hash(px, py, 1);
-    if (t === 0) {
-      const pd = pondAt(px, py);
-      if (pd < 2.35) { const deep = pd < 1.4 ? 0 : pd < 2 ? 1 : 2; c = PAL.water[deep]; if (pd > 2.15 || (r < .02 && pd < 2)) c = PAL.foam; }
-      else if (pd < 2.7) c = PAL.sand[r < .5 ? 0 : 1];
-      else { const n = vnoise(px, py, 9, 2); c = PAL.grass[r < .55 ? (n > .5 ? 2 : 1) : r < .8 ? 0 : 3]; }
-    } else if (t === 1) c = PAL.path[r < .5 ? 0 : r < .75 ? 1 : r < .92 ? 2 : 3];
-    else {
-      // rounded cobbles: offset rows, corners knocked off, lit from the top-left
-      const row = Math.floor(py / 6), off = (row * 5) % 8, col = Math.floor((px + off) / 8), sx = (px + off) % 8, sy = py % 6;
-      const corner = (sx === 1 || sx === 7) && (sy === 1 || sy === 5);
-      const base = PAL.cobble[Math.floor(hash(col, row, 3) * 3)];
-      if (sx === 0 || sy === 0 || corner) c = PAL.mortar;
-      else if (sy === 1 || sx === 1) c = [base[0] + 18, base[1] + 18, base[2] + 16];
-      else if (sy === 5 || sx === 7) c = [base[0] - 22, base[1] - 22, base[2] - 20];
-      else c = r < .12 ? [base[0] - 8, base[1] - 8, base[2] - 8] : base;
-    }
-    const o = (py * WPX + px) * 4; d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255;
-  }
-  wg.putImageData(img, 0, 0);
-  // grass tufts and wildflowers
   for (let ty = 0; ty < WT; ty++) for (let tx = 0; tx < WT; tx++) {
-    if (gt(tx, ty) !== 0) continue;
-    for (let n = 0; n < 2; n++) {
-      if (hash(tx, ty, 30 + n) < .45) continue;
-      const x = tx * TS + Math.floor(hash(tx, ty, 40 + n) * 13) + 1, y = ty * TS + Math.floor(hash(tx, ty, 50 + n) * 12) + 3;
-      if (pondAt(x, y) < 2.9) continue;
-      wg.fillStyle = '#3f7a26'; wg.fillRect(x, y, 1, 2); wg.fillRect(x + 2, y, 1, 2); wg.fillRect(x + 1, y + 1, 1, 2);
-      wg.fillStyle = '#8fd156'; wg.fillRect(x, y - 1, 1, 1); wg.fillRect(x + 2, y - 1, 1, 1);
-    }
-    if (hash(tx, ty, 60) < .06) {
-      const x = tx * TS + 4 + Math.floor(hash(tx, ty, 61) * 8), y = ty * TS + 4 + Math.floor(hash(tx, ty, 62) * 8), col = ['#ffffff', '#ffe066', '#ff8fc8', '#b8a6ff'][Math.floor(hash(tx, ty, 63) * 4)];
-      if (pondAt(x, y) < 2.9) continue;
-      wg.fillStyle = col; wg.fillRect(x - 1, y, 3, 1); wg.fillRect(x, y - 1, 1, 3); wg.fillStyle = '#ffd23f'; wg.fillRect(x, y, 1, 1);
-    }
+    const x = tx * TS, y = ty * TS, k = gt(tx, ty);
+    if (k === 0) { const [c, r] = grassTile(tx, ty); tile(wg, 'ter', c, r, x, y); continue; }
+    if (k === 1) { const h = hash(tx, ty, 3); tile(wg, 'ter', h < .12 ? 12 : h < .2 ? 13 : 13, h < .2 ? 4 : 2, x, y); continue; }
+    if (k === 2) { tile(wg, 'ter', 13, 2, x, y); tile(wg, 'ter', (tx + ty) % 2 ? 12 : 13, 3, x, y); continue; }
+    // lot tile: find which lot and where inside it
+    const key0 = lotOfPx(x + 1, y + 1); if (!key0) continue;
+    const [i, j] = key0.split('_').map(Number), lx = tx - lotT0(i), ly = ty - lotT0(j), field = ter(i, j) === 2;
+    tile(wg, 'ter', 13, 2, x, y);
+    const e = islandTile(lx, ly, field);
+    if (e) tile(wg, 'ter', e[0], e[1], x, y); else { const [c, r] = grassTile(tx, ty); tile(wg, 'ter', c, r, x, y); }
   }
 }
-
 // ---- sprites ----
 function sprite(w, h, fn) {
   const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d');
@@ -307,44 +280,12 @@ function canopy(g, R, circles, cols, outline, seed) {
 }
 const SPR = {};
 function makeSprites() {
-  SPR.oak = sprite(40, 50, (g, R) => {
-    g.fillStyle = 'rgba(20,40,10,.28)'; g.beginPath(); g.ellipse(21, 45, 15, 4.5, 0, 0, 7); g.fill();
-    R(17, 30, 7, 15, '#2b1d14'); R(18, 30, 5, 15, '#7a4a2a'); R(18, 30, 2, 15, '#5e381f'); R(21, 34, 1, 6, '#94603a'); R(15, 43, 3, 2, '#5e381f'); R(23, 43, 3, 2, '#5e381f');
-    canopy(g, R, [[20, 15, 13], [10, 22, 9], [30, 22, 9], [20, 26, 10]], ['#2d5a27', '#3e7a31', '#56a03c', '#7cc44f'], '#1e3d1c', 7);
-  });
-  SPR.pine = sprite(30, 48, (g, R) => {
-    g.fillStyle = 'rgba(20,40,10,.28)'; g.beginPath(); g.ellipse(15, 44, 11, 3.5, 0, 0, 7); g.fill();
-    R(13, 36, 4, 8, '#2b1d14'); R(14, 36, 2, 8, '#6b4026');
-    for (let tier = 0; tier < 4; tier++) {
-      const top = 2 + tier * 8, hgt = 14, half = 5 + tier * 3;
-      for (let y = 0; y < hgt; y++) { const w = Math.round(half * (y + 1) / hgt); for (let x = -w; x <= w; x++) { const edge = x === -w || x === w || y === hgt - 1; const l = -x / (w + 1) * .7 - y / hgt * .4 + (hash(x, y + tier * 20, 9) - .5) * .4; R(15 + x, top + y, edge ? '#173a24' : l > .25 ? '#4f9a5a' : l > -.2 ? '#357a44' : '#245a33'); } }
-    }
-  });
-  SPR.bush = sprite(22, 18, (g, R) => {
-    g.fillStyle = 'rgba(20,40,10,.25)'; g.beginPath(); g.ellipse(11, 15, 9, 2.5, 0, 0, 7); g.fill();
-    canopy(g, R, [[7, 9, 6], [14, 9, 6], [11, 6, 6]], ['#2d5a27', '#3e7a31', '#56a03c', '#7cc44f'], '#1e3d1c', 3);
-    R(6, 6, 2, 2, '#ff6f8f'); R(14, 9, 2, 2, '#ff6f8f'); R(10, 11, 2, 2, '#ffd23f');
-  });
   SPR.sign = sprite(16, 20, (g, R) => {
     g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(5, 18, 8, 2);
     R(7, 8, 3, 11, '#2b1d14'); R(8, 8, 1, 11, '#8a5a32');
     R(1, 2, 14, 9, '#2b1d14'); R(2, 3, 12, 7, '#e6c48a'); R(2, 3, 12, 1, '#f4dcaa'); R(2, 9, 12, 1, '#c9a26b');
     R(6, 4, 4, 4, '#2b1d14'); R(7, 4, 2, 4, '#ffd23f'); R(6, 5, 4, 2, '#ffd23f'); R(7, 5, 1, 1, '#fff2a8');
   });
-  SPR.soil = sprite(16, 16, (g, R) => {
-    R(0, 0, 16, 16, '#6b4426');
-    for (let y = 0; y < 16; y += 4) { R(0, y, 16, 1, '#53331c'); R(0, y + 1, 16, 1, '#7d5230'); }
-    for (let n = 0; n < 6; n++) R(Math.floor(hash(n, 1) * 15), Math.floor(hash(n, 2) * 15), 1, 1, '#8a5e38');
-  });
-  const leaf = (R, x, y, c1, c2) => { R(x, y, 2, 1, c1); R(x + 1, y + 1, 2, 1, c2); };
-  SPR.crop = {
-    seed: sprite(16, 16, (g, R) => { [[4, 6], [10, 9], [6, 12], [11, 4]].forEach(([x, y]) => { R(x, y, 2, 1, '#3a2414'); R(x, y - 1, 2, 1, '#d8b98a'); }); }),
-    sprout: sprite(16, 16, (g, R) => { R(7, 9, 1, 4, '#3f7a26'); leaf(R, 5, 8, '#56a03c', '#3f7a26'); R(8, 7, 2, 1, '#7cc44f'); R(9, 8, 2, 1, '#56a03c'); }),
-    grow: sprite(16, 16, (g, R) => { R(7, 6, 2, 8, '#3f7a26'); R(4, 6, 3, 2, '#56a03c'); R(9, 5, 3, 2, '#7cc44f'); R(3, 9, 4, 2, '#3e7a31'); R(9, 9, 4, 2, '#56a03c'); R(6, 3, 3, 3, '#7cc44f'); R(7, 3, 1, 1, '#a6e07c'); }),
-    carrot: sprite(16, 16, (g, R) => { R(5, 10, 6, 4, '#2b1d14'); R(6, 10, 4, 3, '#ff8a1f'); R(6, 10, 2, 1, '#ffb05a'); R(7, 13, 2, 1, '#d8661a'); R(5, 4, 2, 6, '#3f7a26'); R(9, 4, 2, 6, '#56a03c'); R(7, 2, 2, 8, '#7cc44f'); }),
-    tomato: sprite(16, 16, (g, R) => { R(7, 1, 2, 14, '#8a5a32'); R(4, 4, 8, 7, '#3e7a31'); R(5, 5, 6, 4, '#56a03c'); [[4, 8], [10, 6], [7, 11]].forEach(([x, y]) => { R(x - 1, y - 1, 4, 4, '#7a1424'); R(x, y, 2, 2, '#e8344f'); R(x, y, 1, 1, '#ff9aa8'); }); }),
-    pumpkin: sprite(16, 16, (g, R) => { g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(3, 13, 11, 2); R(2, 5, 12, 9, '#6e2e0e'); R(3, 6, 10, 7, '#f28a1f'); R(5, 6, 1, 7, '#d8661a'); R(10, 6, 1, 7, '#d8661a'); R(4, 7, 2, 2, '#ffb05a'); R(7, 3, 2, 3, '#3f7a26'); R(9, 3, 3, 1, '#56a03c'); }),
-  };
   // fountain with the Purrl statue
   SPR.fountain = sprite(72, 64, (g, R) => {
     g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(37, 50, 33, 12, 0, 0, 7); g.fill();
@@ -408,25 +349,27 @@ function houseSprite(level, wall, roof) {
 const mailCache = {};
 const mailbox = (col) => mailCache[col] || (mailCache[col] = sprite(10, 16, (g, R) => { g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(2, 14, 7, 2); R(4, 6, 2, 9, '#5e381f'); R(0, 1, 10, 7, '#2b1d14'); R(1, 2, 8, 5, col); R(1, 2, 8, 1, 'rgba(255,255,255,.4)'); R(8, 0, 1, 4, '#e8344f'); R(8, 0, 2, 2, '#e8344f'); }));
 
-// ---- static scenery: woods around the edge, groves, fountain ----
+// ---- static scenery: bushes and tall grass around the edge, meadows, the shared wheat fields, the square ----
 function paintScenery() {
-  const items = [];
+  const items = [];                                    // [draw(y-sorted), bottom y]
+  const obj = (c, r, x, y, h = 1) => items.push([() => tile(wg, 'obj', c, r, x, y, h), y + 16]);
   for (let ty = 0; ty < WT; ty++) for (let tx = 0; tx < WT; tx++) {
-    const edge = tx < M - 1 || ty < M - 1 || tx >= WT - M + 1 || ty >= WT - M + 1;
-    if (edge && (tx + ty) % 2 === 0 && hash(tx, ty, 70) < .8) items.push([hash(tx, ty, 71) < .4 ? 'pine' : 'oak', tx * TS - 12 + hash(tx, ty, 72) * 8, ty * TS - 30]);
+    if (gt(tx, ty) !== 0) continue;
+    const h = hash(tx, ty, 11), x = tx * TS, y = ty * TS;
+    if (h < .34) obj(h < .17 ? 5 : 6, 0, x, y); else if (h < .44) obj(4, 7, x, y, 2); else if (h < .52) obj(h < .48 ? 2 : 3, 7, x, y); else if (h < .55) obj(4, 1, x, y);
   }
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-    const [x0, y0] = lotPx(i, j), k = ter(i, j);
-    if (k === 2) {
-      [[8, 6], [52, 14], [26, 40], [62, 54], [6, 60]].forEach(([a, b], n) => { if (hash(i, j, n) < .85) items.push([n % 3 === 1 ? 'pine' : 'oak', x0 + a + hash(i, n, 3) * 6 - 6, y0 + b - 24]); });
-      items.push(['bush', x0 + 40, y0 + 74]);
-    } else if (k === 1) { items.push(['bush', x0 + 4, y0 + 74]); items.push(['bush', x0 + 70, y0 + 6]); }
+    const k = ter(i, j), tx0 = lotT0(i), ty0 = lotT0(j);
+    if (k === 1) for (let ly = 1; ly < LT - 1; ly++) for (let lx = 1; lx < LT - 1; lx++) {
+      const h = hash(tx0 + lx, ty0 + ly, 13), x = (tx0 + lx) * TS, y = (ty0 + ly) * TS;
+      if (h < .22) obj(h < .11 ? 5 : 6, 0, x, y); else if (h < .42) obj(h < .32 ? 4 : 5, 7, x, y, 2); else if (h < .55) obj(h < .48 ? 2 : 3, 7, x, y); else if (h < .6) obj(4, 1, x, y);
+    }
+    if (k === 2) for (let ly = 1; ly < LT - 1; ly++) for (let lx = 1; lx < LT - 1; lx++) obj(hash(i, j, lx + ly * 7) < .8 ? 7 : 6, 7, (tx0 + lx) * TS, (ty0 + ly) * TS, 2);
   }
   const pc = lotPx(PLAZA[0], PLAZA[0])[0] + LPX + TS / 2;
-  items.push(['fountain', pc - 36, pc - 40]);
-  [[-44, -44], [44, -44], [-44, 44], [44, 44]].forEach(([a, b]) => items.push(['bush', pc + a - 11, pc + b - 9]));
-  items.sort((a, b) => a[2] + SPR[a[0]].height - (b[2] + SPR[b[0]].height));
-  for (const [s, x, y] of items) wg.drawImage(SPR[s], Math.round(x), Math.round(y));
+  items.push([() => wg.drawImage(SPR.fountain, pc - 36, pc - 40), pc + 24]);
+  [[-44, -44], [44, -44], [-44, 44], [44, 44]].forEach(([a, b]) => obj(5, 0, pc + a - 8, pc + b - 8));
+  items.sort((a, b) => a[1] - b[1]); items.forEach(([f]) => f());
 }
 
 // ---- camera and frame ----
@@ -445,35 +388,29 @@ function zoomAt(f, sx, sy) { const [a, b] = toWorld(sx, sy); cam.z *= f; clampCa
 let fly = null;
 function flyTo(x, y, z) { fly = { t0: performance.now(), x0: cam.x, y0: cam.y, z0: cam.z, x, y, z: z || cam.z }; }
 function drawFence(g, x0, y0) {
-  const post = (x, y) => { g.fillStyle = 'rgba(0,0,0,.22)'; g.fillRect(x + 1, y + 1, 4, 3); g.fillStyle = '#2b1d14'; g.fillRect(x, y - 9, 4, 11); g.fillStyle = '#a0703c'; g.fillRect(x + 1, y - 8, 2, 9); g.fillStyle = '#c99a5e'; g.fillRect(x + 1, y - 8, 2, 1); };
-  const railH = (xa, xb, y) => { g.fillStyle = '#2b1d14'; g.fillRect(xa, y - 7, xb - xa, 4); g.fillRect(xa, y - 3, xb - xa, 0); g.fillStyle = '#b9844a'; g.fillRect(xa, y - 6, xb - xa, 1); g.fillStyle = '#8a5a32'; g.fillRect(xa, y - 5, xb - xa, 1); };
-  const L = x0 + 1, Rr = x0 + LPX - 5, T = y0 + 9, B = y0 + LPX - 2;
-  railH(L + 2, Rr + 2, T);
-  for (let x = L; x <= Rr; x += TS) post(x, T);
-  for (let y = T + TS; y < B; y += TS) { g.fillStyle = '#2b1d14'; g.fillRect(L + 1, y - 16, 2, 16); g.fillRect(Rr + 1, y - 16, 2, 16); post(L, y); post(Rr, y); }
-  g.fillStyle = '#2b1d14'; g.fillRect(L + 1, B - 16, 2, 16); g.fillRect(Rr + 1, B - 16, 2, 16);
-  const gate0 = x0 + LPX / 2 - 12, gate1 = x0 + LPX / 2 + 12;
-  railH(L + 2, gate0, B); railH(gate1, Rr + 2, B);
-  for (let x = L; x <= Rr; x += TS) if (x + 4 <= gate0 || x >= gate1) post(x, B);
-  post(gate0 - 4, B); post(gate1, B);
+  const R = x0 + (LT - 1) * TS, B = y0 + (LT - 1) * TS;
+  for (let n = 1; n < LT - 1; n++) { tile(g, 'obj', 3, 1, x0, y0 + n * TS); tile(g, 'obj', 3, 1, R, y0 + n * TS); }
+  for (let n = 0; n < LT; n++) tile(g, 'obj', n === 0 ? 0 : n === LT - 1 ? 2 : 1, 0, x0 + n * TS, y0);
+  const gate = [2, 3];                                                                  // opening at the front
+  for (let n = 0; n < LT; n++) if (!gate.includes(n)) tile(g, 'obj', n === 0 || n === 4 ? 0 : n === 1 || n === LT - 1 ? 2 : 1, 3, x0 + n * TS, B);
 }
 function drawLot(g, k, now) {
   const [i, j] = k.split('_').map(Number), [x0, y0] = lotPx(i, j), l = land[k];
   if (!l) { g.drawImage(SPR.sign, x0 + LPX - 26, y0 + LPX - 26); return; }
   const f = farms[l.owner], p = f && f.plots && f.plots[k];
-  // stepping stones from the gate
-  for (let y = y0 + LPX - 30; y < y0 + LPX - 2; y += 9) { g.fillStyle = '#2b1d14'; g.fillRect(x0 + LPX / 2 - 6, y, 12, 6); g.fillStyle = '#b8b0a4'; g.fillRect(x0 + LPX / 2 - 5, y + 1, 10, 4); g.fillStyle = '#d8d2c6'; g.fillRect(x0 + LPX / 2 - 5, y + 1, 10, 1); }
   if (p && p.kind === 'crop') {
-    const c = CROPS[p.crop], t = (now - p.plantedAt) / c.grow, st = t >= 1 ? p.crop : t > .6 ? 'grow' : t > .25 ? 'sprout' : 'seed';
-    g.fillStyle = '#2b1d14'; g.fillRect(x0 + 15, y0 + 15, 66, 50);
-    for (let a = 0; a < 4; a++) for (let b = 0; b < 3; b++) { g.drawImage(SPR.soil, x0 + 16 + a * 16, y0 + 16 + b * 16); g.drawImage(SPR.crop[st], x0 + 16 + a * 16, y0 + 14 + b * 16); }
+    for (let ly = 0; ly < LT; ly++) for (let lx = 0; lx < LT; lx++) { const e = islandTile(lx, ly, true); tile(g, 'ter', 13, 2, x0 + lx * TS, y0 + ly * TS); tile(g, 'ter', e[0], e[1], x0 + lx * TS, y0 + ly * TS); }
+    const c = CROPS[p.crop], t = (now - p.plantedAt) / c.grow, st = c.stages[t >= 1 ? 4 : t > .7 ? 3 : t > .45 ? 2 : t > .2 ? 1 : 0];
+    for (let ly = 1; ly < LT - 1; ly++) for (let lx = 1; lx < LT - 1; lx++) tile(g, 'obj', st[0], st[1], x0 + lx * TS, y0 + ly * TS, st[2]);
+  } else {
+    tile(g, 'obj', 6, 2, x0 + 2 * TS, y0 + 4 * TS); tile(g, 'obj', 7, 2, x0 + 3 * TS, y0 + 4 * TS);       // stepping stones to the gate
   }
   if (p && p.kind === 'house') {
     const s = houseSprite(p.level, WALLS[Math.floor(hash(i, j, 1) * 5)], ROOFC[Math.floor(hash(j, i, 2) * 5)]);
     g.drawImage(s, Math.round(x0 + LPX / 2 - s.width / 2), y0 + LPX - 30 - s.height + 8);
   }
   drawFence(g, x0, y0);
-  g.drawImage(mailbox(l.owner === me ? '#f2a93b' : (colors[l.owner] || '#8a7a9a')), x0 + LPX / 2 + 16, y0 + LPX - 16);
+  g.drawImage(mailbox(l.owner === me ? '#f2a93b' : (colors[l.owner] || '#8a7a9a')), x0 + LPX / 2 + 18, y0 + LPX - 18);
 }
 function lotRectScreen(k) { const [i, j] = k.split('_').map(Number), [x0, y0] = lotPx(i, j); return [(x0 - cam.x) * cam.z + vw / 2, (y0 - cam.y) * cam.z + vh / 2, LPX * cam.z]; }
 function outline(k, col, w) { const [x, y, s] = lotRectScreen(k); cx.strokeStyle = col; cx.lineWidth = w; cx.strokeRect(x + w / 2, y + w / 2, s - w, s - w); }
@@ -566,7 +503,8 @@ $('zhome').onclick = () => {
 function redrawLand() { drawMini(); }
 function redrawCrops() {}
 function draw() { drawMini(); }
-makeSprites(); paintGround(); paintScenery();
+makeSprites();
+sheetsReady.then(() => { paintGround(); paintScenery(); drawMini(); renderShop(); renderPlot(); });
 new ResizeObserver(resize).observe(cv);
 resize(); cam.z = 3; clampCam(); drawMini(); requestAnimationFrame(frame);
 
@@ -595,7 +533,7 @@ function renderPlot() {
   const [x, y] = sel.split('_').map(Number), l = land[sel];
   let h = `<h2>Ô đất ${x + 1}·${y + 1}</h2>`;
   if (!l && !buyable(x, y)) {
-    const T_NAMES = { 1: 'Ao nước', 2: 'Lùm cây', 4: 'Quảng trường' };
+    const T_NAMES = { 1: 'Bãi cỏ dại', 2: 'Ruộng lúa chung', 4: 'Quảng trường' };
     el.innerHTML = h + `<div class="kv"><span>Địa hình</span><b>${T_NAMES[ter(x, y)]}</b></div><p class="note">Khu vực chung, không bán. Chọn một lô có biển bán nhà.</p>`; return;
   }
   if (!l) {
@@ -614,7 +552,7 @@ function renderPlot() {
       const c = HOUSE[1].cost, inv = f.inv || {};
       h += `<button data-act="build" ${busy || !hasCost(f, c) ? 'disabled' : ''}>Xây ${HOUSE[1].name} (${costText(c)})</button>
         <p class="note">Nhà đào ${HOUSE[1].rate} PURR/giờ. Hoặc trồng rau:</p><div class="row">` +
-        Object.entries(CROPS).map(([k, cr]) => `<button data-act="plant" data-crop="${k}" ${busy || !(inv[k] > 0) ? 'disabled' : ''}>${cr.name} (${inv[k] || 0})</button>`).join('') + `</div>`;
+        Object.entries(CROPS).map(([k, cr]) => `<button data-act="plant" data-crop="${k}" ${busy || !(inv[k] > 0) ? 'disabled' : ''}>${icon(cr.icon)}${cr.name} (${inv[k] || 0})</button>`).join('') + `</div>`;
     }
   } else if (p.kind === 'house') {
     const H = HOUSE[p.level];
@@ -629,12 +567,18 @@ function renderPlot() {
   }
   el.innerHTML = h;
 }
+const iconCache = {};
+function icon([c, r]) {
+  const k = c + '_' + r;
+  if (!iconCache[k]) { const cv0 = document.createElement('canvas'); cv0.width = cv0.height = 16; cv0.getContext('2d').drawImage(SHEET.obj, c * 16, r * 16, 16, 16, 0, 0, 16, 16); iconCache[k] = cv0.toDataURL(); }
+  return `<img class="ico" src="${iconCache[k]}" alt="" width="24" height="24">`;
+}
 function renderShop() {
   const f = myFarm();
   let h = `<h2>Cửa hàng</h2>`;
   if (f) h += invHtml(f);
   h += `<div class="shop">` + Object.entries(ITEMS).map(([k, it]) =>
-    `<span>${esc(it.name)} <span class="p">${it.price}</span></span>
+    `<span class="item">${icon(it.icon)}${esc(it.name)} <span class="p">${it.price}</span></span>
      <button data-act="buy" data-item="${k}" data-qty="1" ${!f || busy || f.purr < it.price ? 'disabled' : ''}>+1</button>
      <button data-act="buy" data-item="${k}" data-qty="5" ${!f || busy || f.purr < it.price * 5 ? 'disabled' : ''}>+5</button>`).join('') + `</div>
     <p class="note">Giá tính bằng PURR. PURR tiêu ở cửa hàng bị đốt khỏi lưu thông.</p>`;
