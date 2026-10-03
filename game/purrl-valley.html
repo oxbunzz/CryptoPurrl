@@ -168,13 +168,19 @@ function drawLot(c, k, now) {
 
 // ================= canvas, camera, player =================
 const cv = document.getElementById('game'), cx = cv.getContext('2d');
-const cam = { x: WPXW / 2, y: WPXH / 2, z: 3, follow: true };
+const cam = { x: WPXW / 2, y: WPXH / 2, z: 3, tz: 3, ax: 0, ay: 0, follow: true }, MAXZ = 8;
 let vw = 0, vh = 0, dpr = 1, S = 3, F = 26;
 const minZ = () => Math.max(vw / WPXW, vh / WPXH);
-function clampCam() { cam.z = Math.min(6, Math.max(minZ(), cam.z)); const hw = vw / 2 / cam.z, hh = vh / 2 / cam.z; cam.x = Math.min(WPXW - hw, Math.max(hw, cam.x)); cam.y = Math.min(WPXH - hh, Math.max(hh, cam.y)); }
+function clampCam() { cam.z = Math.min(MAXZ, Math.max(minZ(), cam.z)); cam.tz = Math.min(MAXZ, Math.max(minZ(), cam.tz)); const hw = vw / 2 / cam.z, hh = vh / 2 / cam.z; cam.x = Math.min(WPXW - hw, Math.max(hw, cam.x)); cam.y = Math.min(WPXH - hh, Math.max(hh, cam.y)); }
 function resize() { const r = cv.getBoundingClientRect(); dpr = window.devicePixelRatio || 1; vw = r.width; vh = r.height; cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr); S = Math.min(vw, vh * 1.4) >= 900 ? 3 : 2; F = S === 3 ? 26 : 20; clampCam(); }
 const toWorld = (sx, sy) => [cam.x + (sx - vw / 2) / cam.z, cam.y + (sy - vh / 2) / cam.z];
-function zoomAt(f, sx, sy) { const [a, b] = toWorld(sx, sy); cam.z *= f; clampCam(); const [c, d] = toWorld(sx, sy); cam.x += a - c; cam.y += b - d; clampCam(); }
+function zoomAt(f, sx, sy) { const [a, b] = toWorld(sx, sy); cam.z *= f; cam.tz = cam.z; clampCam(); const [c, d] = toWorld(sx, sy); cam.x += a - c; cam.y += b - d; clampCam(); }
+// smooth zoom: set a target, ease toward it keeping the point under (sx, sy) fixed
+function zoomTo(f, sx, sy) { cam.tz = Math.min(MAXZ, Math.max(minZ(), cam.tz * f)); cam.ax = sx; cam.ay = sy; }
+function easeZoom(dt) {
+  if (Math.abs(cam.tz - cam.z) < cam.z * .002) { if (cam.z !== cam.tz) { const t = cam.tz; zoomAt(t / cam.z, cam.ax, cam.ay); } return; }
+  const t = cam.tz, nz = cam.z + (t - cam.z) * Math.min(1, dt * 14); zoomAt(nz / cam.z, cam.ax, cam.ay); cam.tz = t; clampCam();
+}
 const player = { x: (M + 3 + 2 * PITCH + 10.5) * TS, y: (M + 3 + PITCH + 14) * TS, dir: 0, flip: false, moving: false, tx: null, ty: null };
 const walkable = (x, y) => { const k = g(Math.floor(x / TS), Math.floor(y / TS)); return x > M * TS && y > M * TS && x < WPXW - M * TS && y < WPXH - M * TS && k !== 3; };
 function stepPlayer(dt) {
@@ -255,8 +261,8 @@ function drawHUD(now) {
   });
   // zoom and home
   const zy = narrow ? S * 4 + menu.length * (bh + S * 2) : S * 4 + bh + S * 4, zx = vw - S * 4 - bh;
-  button(zx, zy, bh, bh, '', () => zoomAt(1.4, vw / 2, vh / 2), { square: true, icon: (x0, y0) => ic('plus', x0, y0) });
-  button(zx, zy + bh + S * 2, bh, bh, '', () => zoomAt(1 / 1.4, vw / 2, vh / 2), { square: true, icon: (x0, y0) => ic('minus', x0, y0) });
+  button(zx, zy, bh, bh, '', () => zoomTo(1.4, vw / 2, vh / 2), { square: true, icon: (x0, y0) => ic('plus', x0, y0) });
+  button(zx, zy + bh + S * 2, bh, bh, '', () => zoomTo(1 / 1.4, vw / 2, vh / 2), { square: true, icon: (x0, y0) => ic('minus', x0, y0) });
   button(zx, zy + 2 * (bh + S * 2), bh, bh, '', goHome, { square: true, icon: (x0, y0) => ic('map', x0, y0) });
 }
 function goHome() {
@@ -384,6 +390,7 @@ let ready = false, last = performance.now();
 function frame(t) {
   const dt = Math.min(.05, (t - last) / 1000); last = t;
   if (ready) stepPlayer(dt);
+  easeZoom(dt);
   if (cam.follow) { cam.x += (player.x - cam.x) * Math.min(1, dt * 6); cam.y += (player.y - cam.y) * Math.min(1, dt * 6); }
   clampCam();
   const now = Date.now(), sw = vw / cam.z, sh = vh / cam.z, L = cam.x - sw / 2, T = cam.y - sh / 2;
@@ -443,9 +450,16 @@ function endPtr(e) {
 }
 cv.addEventListener('pointerup', endPtr); cv.addEventListener('pointercancel', endPtr);
 cv.addEventListener('pointerleave', () => { hover = null; mouse.x = mouse.y = -1; });
-cv.addEventListener('wheel', (e) => { e.preventDefault(); const r = cv.getBoundingClientRect(); zoomAt(Math.exp(-e.deltaY * .0016), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+cv.addEventListener('wheel', (e) => {
+  e.preventDefault(); if (ui.title) return;
+  const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  if (ui.win || blocks.some((b) => inside(b, x, y))) return;
+  const dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? vh : 1);
+  const f = Math.exp(-Math.max(-240, Math.min(240, dy)) * (e.ctrlKey ? .01 : .0018));
+  cam.follow = false; zoomTo(f, x, y); // zoom toward the cursor; walking re-centres on the player
+}, { passive: false });
 const MOVE = ['w', 'a', 's', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Shift'];
-window.addEventListener('keydown', (e) => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; if (MOVE.includes(k)) { keys.add(k); if (k.startsWith('Arrow')) e.preventDefault(); } if (k === '+' || k === '=') zoomAt(1.25, vw / 2, vh / 2); if (k === '-') zoomAt(.8, vw / 2, vh / 2); if (k === 'Escape') { sel = null; ui.win = null; } if (k === 'Enter') ui.title = false; });
+window.addEventListener('keydown', (e) => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; if (MOVE.includes(k)) { keys.add(k); if (k.startsWith('Arrow')) e.preventDefault(); } if (k === '+' || k === '=') zoomTo(1.25, vw / 2, vh / 2); if (k === '-') zoomTo(.8, vw / 2, vh / 2); if (k === 'Escape') { sel = null; ui.win = null; } if (k === 'Enter') ui.title = false; });
 window.addEventListener('keyup', (e) => keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key));
 window.addEventListener('blur', () => keys.clear());
 
