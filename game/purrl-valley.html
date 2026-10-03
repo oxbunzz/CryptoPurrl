@@ -94,9 +94,10 @@ function nine(g, name, x, y, w, h, b, s) {
 }
 
 // ================= world: one big continent shaped like Europe =================
-// every farm is a 22×22 grass square: a house in the middle and four small fields around it (N, W, E, S), with roads between farms
-const TS = 16, LOT = 22, CELL = 24, CW = 146, CH = 117, MW = CW * CELL, MH = CH * CELL, WPXW = MW * TS, WPXH = MH * TS, TARGET_PLOTS = 4444;
-const SUBS = [[7, 0, 8, 7], [0, 7, 7, 8], [15, 7, 7, 8], [7, 15, 8, 7]], HOUSE_SUB = [7, 7, 8, 8];
+// every farm is a 24×24 grass square: a house in the middle, a stone path from the road to its door and four fields in the corners;
+// farms are separated by a grass verge and a two-lane road
+const TS = 16, LOT = 24, LOT_OFF = 3, CELL = 30, CW = 183, CH = 146, MW = CW * CELL, MH = CH * CELL, WPXW = MW * TS, WPXH = MH * TS, TARGET_PLOTS = 4444;
+const SUBS = [[0, 0, 8, 8], [16, 0, 8, 8], [0, 16, 8, 8], [16, 16, 8, 8]], HOUSE_SUB = [8, 8, 8, 8];
 function hash(a, b, c = 0) { let h = (a * 374761393 + b * 668265263 + c * 2147483647) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
 function vnoise(x, y, s) {
   const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
@@ -120,7 +121,7 @@ const DISTRICTS = [['Lusitania', -8, 39.6], ['Iberia', -3.6, 40.2], ['Aquitania'
   ['Provence', 6, 44.4], ['Alpina', 9, 46.6], ['Italia', 12.8, 42.6], ['Sicilia', 14.2, 37.6], ['Sardinia', 9, 40.6], ['Batavia', 5.2, 51.6], ['Germania', 9.6, 51], ['Saxonia', 13, 52.2], ['Jutland', 9.4, 56], ['Norvegia', 8.6, 61], ['Svealand', 15, 59.6],
   ['Lapland', 21, 67], ['Suomi', 26, 63], ['Karelia', 33, 63.4], ['Borealia', 40.6, 66], ['Baltica', 24.4, 56.6], ['Polonia', 19.4, 52.2], ['Bohemia', 15, 49.6], ['Pannonia', 19.4, 47.2], ['Dacia', 25, 46], ['Balkania', 20.6, 43.4],
   ['Hellas', 22, 39], ['Creta', 25, 35.3], ['Thracia', 26.6, 42.2], ['Ruthenia', 30, 54.6], ['Sarmatia', 32.4, 49.6], ['Taurica', 34.4, 45.4], ['Muscovy', 38.6, 56.6], ['Volga', 42, 51.4], ['Caucasia', 41.6, 44.2], ['Cyprus', 33.2, 35]];
-const G = new Uint8Array(MW * MH);                 // 0 grass, 1 dirt road, 2 stone square, 3 water
+const G = new Uint8Array(MW * MH);                 // 0 grass, 1 road, 2 stone (squares and paths), 3 water
 const at = (x, y) => y * MW + x, inMap = (x, y) => x >= 0 && y >= 0 && x < MW && y < MH;
 const g = (x, y) => (inMap(x, y) ? G[at(x, y)] : 3);
 const CT = new Uint8Array(CW * CH), CD = new Int8Array(CW * CH).fill(-1); // cell type and district
@@ -138,8 +139,10 @@ const PLOTS = [], PLOT_DIST = [], CELLPLOT = new Int32Array(CW * CH).fill(-1), P
       for (let k = 0; k + 1 < xs.length; k += 2) for (let x = Math.max(0, Math.ceil(xs[k] - .5)); x < Math.min(HW, xs[k + 1] - .5); x++) L0[y * HW + x] = 1;
     }
   }
+  const GW = (HW >> 2) + 2, GH = (HH >> 2) + 2, GX = new Float32Array(GW * GH), GY = new Float32Array(GW * GH);
+  for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) { GX[j * GW + i] = (fbm(i * 4, j * 4, 11) - .5) * 24; GY[j * GW + i] = (fbm(i * 4, j * 4, 21) - .5) * 24; }
   for (let y = 0; y < HH; y++) for (let x = 0; x < HW; x++) {
-    const sx = Math.round(x + (fbm(x, y, 11) - .5) * 20), sy = Math.round(y + (fbm(x, y, 21) - .5) * 20);
+    const gi = (y >> 2) * GW + (x >> 2), sx = Math.round(x + GX[gi] + (hash(x, y, 3) - .5) * 1.2), sy = Math.round(y + GY[gi] + (hash(x, y, 2) - .5) * 1.2);
     L1[y * HW + x] = sx >= 0 && sy >= 0 && sx < HW && sy < HH ? L0[sy * HW + sx] : 0;
   }
   for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) G[at(x, y)] = L1[Math.min(HH - 1, y >> 1) * HW + Math.min(HW - 1, x >> 1)] ? 0 : 3;
@@ -159,7 +162,7 @@ const PLOTS = [], PLOT_DIST = [], CELLPLOT = new Int32Array(CW * CH).fill(-1), P
     for (let c = 0; c < CW * CH; c++) if (CD[c] === i && (CT[c] === C_PLOT || CT[c] === C_FOREST)) { const d = ((c % CW + .5) * CELL - sx) ** 2 + ((Math.floor(c / CW) + .5) * CELL - sy) ** 2 + (CT[c] === C_FOREST ? 4e4 : 0); if (d < bd) { bd = d; best = c; } }
     if (best < 0) return;
     CT[best] = C_TOWN; seedOwner[i] = DIST.length;
-    DIST.push({ name, town: [(best % CW) * CELL + 1, Math.floor(best / CW) * CELL + 1], plots: [] });
+    DIST.push({ name, town: [(best % CW) * CELL + LOT_OFF, Math.floor(best / CW) * CELL + LOT_OFF], plots: [] });
   });
   for (let c = 0; c < CW * CH; c++) if (CD[c] >= 0) { const d = seedOwner[CD[c]]; CD[c] = d === undefined ? -1 : d; }
   // exactly TARGET_PLOTS farms: turn the surplus into woodland, spread evenly
@@ -169,12 +172,14 @@ const PLOTS = [], PLOT_DIST = [], CELLPLOT = new Int32Array(CW * CH).fill(-1), P
   for (let cy = 0; cy < CH; cy++) for (let cx = 0; cx < CW; cx++) {
     const c = cy * CW + cx, x0 = cx * CELL, y0 = cy * CELL, t = CT[c];
     if (t !== C_PLOT && t !== C_TOWN) continue;
-    for (let y = 0; y < CELL; y++) for (let x = 0; x < CELL; x++) G[at(x0 + x, y0 + y)] = 1;
-    for (let y = 1; y <= LOT; y++) for (let x = 1; x <= LOT; x++) G[at(x0 + x, y0 + y)] = t === C_PLOT ? 0 : 2;
-    if (t === C_PLOT && CD[c] >= 0) { const id = PLOTS.length; PLOTS.push([x0 + 1, y0 + 1]); PLOT_DIST.push(CD[c]); CELLPLOT[c] = id; }
+    const O = LOT_OFF, lx0 = x0 + O, ly0 = y0 + O;
+    for (let y = 0; y < CELL; y++) for (let x = 0; x < CELL; x++) { const ring = Math.min(x, y, CELL - 1 - x, CELL - 1 - y); G[at(x0 + x, y0 + y)] = ring < 2 ? 1 : 0; }
+    for (let y = 0; y < LOT; y++) for (let x = 0; x < LOT; x++) G[at(lx0 + x, ly0 + y)] = t === C_PLOT ? 0 : 2;
+    if (t === C_PLOT) for (let y = 16; y <= LOT; y++) for (let x = 11; x <= 12; x++) G[at(lx0 + x, ly0 + y)] = 2;   // path from the road to the front door
+    if (t === C_PLOT && CD[c] >= 0) { const id = PLOTS.length; PLOTS.push([lx0, ly0]); PLOT_DIST.push(CD[c]); CELLPLOT[c] = id; }
     if (t === C_TOWN) {
-      for (const [a, b] of [[3, 3], [17, 3], [3, 16], [17, 16]]) PROPS.push(['lamp', (x0 + 1 + a) * TS, (y0 + 1 + b) * TS]);
-      PROPS.push(['well', (x0 + 1 + 5) * TS, (y0 + 1 + 9) * TS], ['board', (x0 + 1 + 14) * TS, (y0 + 1 + 8) * TS]);
+      for (const [a, b] of [[3, 3], [19, 3], [3, 18], [19, 18]]) PROPS.push(['lamp', (lx0 + a) * TS, (ly0 + b) * TS]);
+      PROPS.push(['well', (lx0 + 5) * TS, (ly0 + 10) * TS], ['board', (lx0 + 16) * TS, (ly0 + 9) * TS]);
     }
   }
   // merge districts with too little farmland into their nearest neighbour
@@ -245,12 +250,24 @@ function treeAt(X, Y) {
     for (let b = -1; b <= 2; b++) for (let a = -1; a <= 2; a++) if (g(X + a, Y + b) !== 0) return null;
     return [hash(X, Y, 9) < .5 ? 'pine' : 'maple', (X + (hash(X, Y, 10) - .5)) * TS - 4, (Y + 1 + hash(X, Y, 12)) * TS, hash(X, Y, 13) < .5 ? 0 : 1];
   }
-  if (t === C_PLOT) { const lx = X - (c % CW) * CELL - 1, ly = Y - Math.floor(c / CW) * CELL - 1; if ((lx === 2 || lx === 16) && (ly === 4 || ly === 19)) return ['maple', X * TS, (Y + 1) * TS, hash(X, Y, 14) < .5 ? 0 : 1]; }
+  if (t === C_PLOT) { const lx = X - (c % CW) * CELL - LOT_OFF, ly = Y - Math.floor(c / CW) * CELL - LOT_OFF; if (((lx === 1 || lx === 5 || lx === 17 || lx === 21) && ly === 13) || ((lx === 9 || lx === 13) && ly === 5)) return ['maple', X * TS, (Y + 1) * TS, hash(X, Y, 14) < .5 ? 0 : 1]; }
   return null;
 }
 // ---- chunked rendering: 32×32-tile chunks painted on demand, plus a one-pixel-per-tile overview ----
-const CHK = 32, CPX = CHK * TS, NCX = Math.ceil(MW / CHK), NCY = Math.ceil(MH / CHK), OVS = 1 / 16;
+const CHK = 32, CPX = CHK * TS, NCX = Math.ceil(MW / CHK), NCY = Math.ceil(MH / CHK), OVT = 3, OVW = Math.ceil(MW / OVT), OVH = Math.ceil(MH / OVT);
 const PROP_BUCKET = Array.from({ length: NCX * NCY }, () => []);
+function paintRoad(c, x, y, X, Y) {
+  c.fillStyle = '#56565f'; c.fillRect(X, Y, TS, TS);
+  for (let k = 0; k < 3; k++) { c.fillStyle = hash(x, y, 60 + k) < .5 ? '#4c4c55' : '#61616a'; c.fillRect(X + Math.floor(hash(x, y, 70 + k) * 15), Y + Math.floor(hash(x, y, 80 + k) * 15), 2, 1); }
+  const r = (a, b) => g(x + a, y + b) === 1, lx = x % CELL, ly = y % CELL;
+  const hBand = ly < 2 || ly >= CELL - 2, vBand = lx < 2 || lx >= CELL - 2;
+  c.fillStyle = '#d9d4c7';
+  if (!r(0, -1)) c.fillRect(X, Y + 1, TS, 1); if (!r(0, 1)) c.fillRect(X, Y + TS - 2, TS, 1);
+  if (!r(-1, 0)) c.fillRect(X + 1, Y, 1, TS); if (!r(1, 0)) c.fillRect(X + TS - 2, Y, 1, TS);
+  c.fillStyle = '#f2c14e';
+  if (hBand && !vBand && ly === 0 && r(0, -1) && !(x & 1)) c.fillRect(X + 3, Y - 1, 10, 2);
+  if (vBand && !hBand && lx === 0 && r(-1, 0) && !(y & 1)) c.fillRect(X - 1, Y + 3, 2, 10);
+}
 function paintTile(c, x, y) {
   const X = x * TS, Y = y * TS, k = g(x, y);
   if (k === 3) { whole(c, 'water', X, Y); return; }
@@ -262,14 +279,15 @@ function paintTile(c, x, y) {
     tile16(c, nearWater ? 'shore' : 'grass', tc, tr, X, Y);
     const cell = cellOfPx(X, Y);
     if (CT[cell] === C_WILD && hash(x, y, 30) < .03) spr(c, 'gstones', Math.floor(hash(x, y, 31) * 4) * 16, 0, 16, 16, X, Y);
-  } else if (k === 2) { const cx = Math.floor(x / CELL) * CELL + 1, cy = Math.floor(y / CELL) * CELL + 1; const [tc, tr] = block(LOT, LOT, x - cx, y - cy); tile16(c, 'stonepath', tc, tr, X, Y); }
+  } else if (k === 2) { const o = (a, b) => g(x + a, y + b) !== 2; const [tc, tr] = edgePiece(o(0, -1), o(0, 1), o(-1, 0), o(1, 0), 0, 0, 0, 0); tile16(c, 'stonepath', tc, tr, X, Y); }
+  else if (k === 1) paintRoad(c, x, y, X, Y);
 }
 function paintChunk(c, i, j) {
   c.setTransform(1, 0, 0, 1, -i * CPX, -j * CPX); c.imageSmoothingEnabled = false;
   const x0 = i * CHK, y0 = j * CHK, x1 = Math.min(MW, x0 + CHK), y1 = Math.min(MH, y0 + CHK);
   for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) paintTile(c, x, y);
   for (let cy = Math.floor(y0 / CELL); cy <= Math.min(CH - 1, Math.floor((y1 - 1) / CELL)); cy++) for (let cx = Math.floor(x0 / CELL); cx <= Math.min(CW - 1, Math.floor((x1 - 1) / CELL)); cx++) {
-    if (CELLPLOT[cy * CW + cx] < 0) continue; const lx = (cx * CELL + 1) * TS, ly = (cy * CELL + 1) * TS;
+    if (CELLPLOT[cy * CW + cx] < 0) continue; const lx = (cx * CELL + LOT_OFF) * TS, ly = (cy * CELL + LOT_OFF) * TS;
     for (const [fx, fy, fw, fh] of SUBS) drawFence(c, lx + fx * TS, ly + fy * TS, fw, fh);
   }
   const items = [];
@@ -278,14 +296,14 @@ function paintChunk(c, i, j) {
   items.sort((a, b) => a[0] - b[0]).forEach(([, f]) => f());
   c.setTransform(1, 0, 0, 1, 0, 0);
 }
-const overview = document.createElement('canvas'); overview.width = MW; overview.height = MH;
+const overview = document.createElement('canvas'); overview.width = OVW; overview.height = OVH;
 const ovg = overview.getContext('2d');
 function quickOverview() {
-  const im = ovg.createImageData(MW, MH), d = im.data;
-  const COL = [[0x7e, 0xc4, 0x33], [0xed, 0x9c, 0x51], [0x80, 0x6f, 0x5c], [0x00, 0x92, 0xdd]], TREE = [0x2f, 0x7a, 0x3c];
-  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
-    const t = G[at(x, y)], cell = Math.floor(y / CELL) * CW + Math.floor(x / CELL);
-    const c = t === 0 && (CT[cell] === C_FOREST ? hash(x, y, 40) < .7 : CT[cell] === C_WILD && hash(x, y, 41) < .25) ? TREE : COL[t], i = (y * MW + x) * 4;
+  const im = ovg.createImageData(OVW, OVH), d = im.data;
+  const COL = [[0x7e, 0xc4, 0x33], [0x56, 0x56, 0x5f], [0x80, 0x6f, 0x5c], [0x00, 0x92, 0xdd]], TREE = [0x2f, 0x7a, 0x3c];
+  for (let oy = 0; oy < OVH; oy++) for (let ox = 0; ox < OVW; ox++) {
+    const x = Math.min(MW - 1, ox * OVT + 1), y = Math.min(MH - 1, oy * OVT + 1), t = G[at(x, y)], cell = Math.floor(y / CELL) * CW + Math.floor(x / CELL);
+    const c = t === 0 && (CT[cell] === C_FOREST ? hash(x, y, 40) < .7 : CT[cell] === C_WILD && hash(x, y, 41) < .25) ? TREE : COL[t], i = (oy * OVW + ox) * 4;
     d[i] = c[0]; d[i + 1] = c[1]; d[i + 2] = c[2]; d[i + 3] = 255;
   }
   ovg.putImageData(im, 0, 0);
@@ -299,12 +317,29 @@ function getChunk(i, j, allowPaint) {
   if (chunks.size >= CHUNK_MAX) { const [old, oc] = chunks.entries().next().value; chunks.delete(old); cnv = oc; cnv.getContext('2d').clearRect(0, 0, CPX, CPX); }
   else { cnv = document.createElement('canvas'); cnv.width = cnv.height = CPX; }
   paintChunk(cnv.getContext('2d'), i, j); chunks.set(id, cnv);
-  ovg.imageSmoothingEnabled = true; ovg.imageSmoothingQuality = 'high'; ovg.drawImage(cnv, 0, 0, CPX, CPX, i * CHK, j * CHK, CHK, CHK); // sharpen the overview too
+  ovg.imageSmoothingEnabled = true; ovg.imageSmoothingQuality = 'high'; ovg.drawImage(cnv, 0, 0, CPX, CPX, i * CHK / OVT, j * CHK / OVT, CHK / OVT, CHK / OVT); // sharpen the overview too
   return cnv;
 }
 function prepareWorld() {
   for (const pr of PROPS) { const [n, x, y] = pr, r = A[n]; for (let j = Math.max(0, Math.floor(y / CPX)); j <= Math.min(NCY - 1, Math.floor((y + r[3] - 1) / CPX)); j++) for (let i = Math.max(0, Math.floor(x / CPX)); i <= Math.min(NCX - 1, Math.floor((x + r[2] - 1) / CPX)); i++) PROP_BUCKET[j * NCX + i].push(pr); }
   quickOverview();
+}
+// ---- traffic lights at some crossings: two posts on opposite corners, one for each direction ----
+const isFarmCell = (cx, cy) => cx >= 0 && cy >= 0 && cx < CW && cy < CH && (CT[cy * CW + cx] === C_PLOT || CT[cy * CW + cx] === C_TOWN);
+const hasLights = (cx, cy) => isFarmCell(cx, cy) && isFarmCell(cx - 1, cy) && isFarmCell(cx, cy - 1) && isFarmCell(cx - 1, cy - 1) && hash(cx, cy, 88) < .16;
+const LIGHT = ['red', 'yellow', 'green'].map((on) => {
+  const c = document.createElement('canvas'); c.width = 12; c.height = 30; const g2 = c.getContext('2d');
+  g2.fillStyle = 'rgba(0,0,0,.25)'; g2.fillRect(2, 28, 9, 2);
+  g2.fillStyle = '#2c2c34'; g2.fillRect(5, 14, 2, 15); g2.fillRect(3, 27, 6, 2);
+  g2.fillStyle = '#17171c'; g2.fillRect(1, 0, 10, 15); g2.fillStyle = '#34343d'; g2.fillRect(2, 1, 8, 13);
+  [['red', '#ff5a44', '#4a1e1a'], ['yellow', '#ffd23e', '#4a3d16'], ['green', '#52e070', '#173f22']].forEach(([n, lit, dim], i) => { g2.fillStyle = n === on ? lit : dim; g2.fillRect(4, 2 + i * 4, 4, 3); if (n === on) { g2.fillStyle = 'rgba(255,255,255,.7)'; g2.fillRect(4, 2 + i * 4, 1, 1); } });
+  return c;
+});
+function lightState(t, ns) { const p = (t / 1000) % 12, a = ns ? p : (p + 6) % 12; return a < 4.6 ? 2 : a < 6 ? 1 : 0; }
+function drawLights(c, cx, cy, t) {
+  const X = cx * CELL * TS, Y = cy * CELL * TS;
+  c.drawImage(LIGHT[lightState(t, true)], X + 2.05 * TS, Y + 3 * TS - 46, 18, 45);   // south-east corner, for north-south traffic
+  c.drawImage(LIGHT[lightState(t, false)], X - 3.05 * TS, Y - 2 * TS - 44, 18, 45);  // north-west corner, for east-west traffic
 }
 // ---- one farm ----
 function drawFence(c, x0, y0, w, h) {
@@ -317,7 +352,7 @@ function cropCol(p, now) { const t = (now - p.plantedAt) / CROPS[p.crop].grow; r
 const fieldReady = (s, now) => !!s && (s.kind === 'crop' ? now - s.plantedAt >= CROPS[s.crop].grow : s.kind === 'animal' ? now - s.since >= ANIMALS[s.animal].cycle : false);
 function drawLot(c, k, now, t, detail) {
   const [x, y] = k.split('_').map(Number), x0 = x * TS, y0 = y * TS, l = land[k];
-  if (!l) { if (detail) whole(c, 'sign', x0 + 10 * TS, y0 + 9.5 * TS); return; }
+  if (!l) { if (detail) whole(c, 'sign', x0 + 11 * TS, y0 + 10.5 * TS); return; }
   const f = farms[l.owner], p = plotOf(f, k), H = p.house;
   if (detail) p.fields.forEach((s, i) => {
     const [fx, fy, fw, fh] = SUBS[i], X = x0 + fx * TS, Y = y0 + fy * TS;
@@ -332,13 +367,13 @@ function drawLot(c, k, now, t, detail) {
     }
     if (fieldReady(s, now)) spr(c, 'coin', (Math.floor(t / 140) % 6) * 16, 0, 16, 16, X + (fw / 2 - .5) * TS, Y + (fh / 2 - 1) * TS - 4 * Math.abs(Math.sin(t / 300)));
   });
-  const cx0 = x0 + (HOUSE_SUB[0] + HOUSE_SUB[2] / 2) * TS, by = y0 + (HOUSE_SUB[1] + HOUSE_SUB[3] - .3) * TS;
+  const cx0 = x0 + (HOUSE_SUB[0] + HOUSE_SUB[2] / 2) * TS, by = y0 + (HOUSE_SUB[1] + HOUSE_SUB[3]) * TS - 2;
   if (H) {
     const n = HOUSE[H.level].spr, r = A[n], hx = cx0 - r[2] / 2, hy = by - r[3];
     if (building(H, now)) { c.globalAlpha = .35; whole(c, n, hx, hy); c.globalAlpha = 1; const q = A.construct; whole(c, 'construct', cx0 - q[2] / 2, by - q[3]); }
     else whole(c, n, hx, hy);
   }
-  if (detail) spr(c, 'mailbox', l.owner === me ? 16 : 0, 0, 16, 32, x0 + 15.2 * TS, y0 + 13 * TS);
+  if (detail) spr(c, 'mailbox', l.owner === me ? 16 : 0, 0, 16, 32, x0 + 13.3 * TS, y0 + 18 * TS);
 }
 
 const NEAR_Z = .3, DETAIL_Z = .45, FAR_Z = .6;
@@ -368,9 +403,9 @@ function easeZoom(dt) {
   const t = cam.tz, nz = cam.z + (t - cam.z) * Math.min(1, dt * 14); zoomAt(nz / cam.z, cam.ax, cam.ay); cam.tz = t; clampCam();
 }
 const START_DIST = Math.max(0, DIST.findIndex((d) => d.name === 'Gallia'));
-const player = { x: townCenter(START_DIST)[0], y: townCenter(START_DIST)[1] + (LOT / 2 + 1.2) * TS, dir: 0, flip: false, moving: false, tx: null, ty: null };
+const player = { x: townCenter(START_DIST)[0], y: townCenter(START_DIST)[1] + (LOT / 2 + 2) * TS, dir: 0, flip: false, moving: false, tx: null, ty: null };
 function travelTo(px, py) { player.x = px; player.y = py; player.tx = null; cam.follow = true; cam.x = px; cam.y = py; if (cam.z < 1.2) { cam.z = cam.tz = 1.6; } clampCam(); }
-const travelToDist = (d) => { const [x, y] = townCenter(d); travelTo(x, y + (LOT / 2 + 1.2) * TS); };
+const travelToDist = (d) => { const [x, y] = townCenter(d); travelTo(x, y + (LOT / 2 + 2) * TS); };
 const walkable = (x, y) => g(Math.floor(x / TS), Math.floor(y / TS)) !== 3;
 function stepPlayer(dt) {
   let dx = 0, dy = 0;
@@ -457,7 +492,25 @@ function drawHUD(now) {
 function goHome() {
   const mine = myPlots();
   if (!mine.length) { toast('No land yet. Back to the Gallia town square.'); travelToDist(START_DIST); return; }
-  const [x, y] = mine[0].split('_').map(Number); travelTo((x + LOT / 2) * TS, (y + LOT + .5) * TS); sel = mine[0]; ui.sub = null; ui.dist = -1;
+  const [x, y] = mine[0].split('_').map(Number); travelTo((x + 12) * TS, (y + LOT + .5) * TS); sel = mine[0]; ui.sub = null; ui.dist = -1;
+}
+function backToMe() { ui.dist = -1; ui.win = null; cam.follow = true; cam.tz = Math.max(cam.tz, 1.6); cam.ax = vw / 2; cam.ay = vh / 2; }
+function drawMeMarker(t, close) {
+  const px = (player.x - cam.x) * cam.z + vw / 2, py = (player.y - cam.y) * cam.z + vh / 2;
+  const away = px < 0 || py < 0 || px > vw || py > vh, small = cam.z < DETAIL_Z;
+  if (small || away) {   // a little card with your character, pinned to where you stand (or to the screen edge)
+    const bs = 16 * S + S * 8, m = S * 6 + bs / 2, x = Math.min(vw - m, Math.max(m, px)), y = Math.min(vh - m - bs / 2, Math.max(m, py - bs * .9));
+    const bob = away ? 0 : Math.round(Math.sin(t / 260) * S);
+    cx.fillStyle = '#3b1f12'; cx.beginPath(); cx.moveTo(x - S * 3, y + bs / 2 - S + bob); cx.lineTo(x + S * 3, y + bs / 2 - S + bob); cx.lineTo(x, y + bs / 2 + S * 4 + bob); cx.fill();
+    nine(cx, 'slothot', x - bs / 2, y - bs / 2 + bob, bs, bs, 4, S);
+    spr(cx, 'idle', (Math.floor(t / 220) % 4) * 32, 0, 32, 32, x - bs / 2 + S * 2, y - bs / 2 + S * 1 + bob, (bs - S * 4) / 32);
+    hits.push({ x: x - bs / 2, y: y - bs / 2, w: bs, h: bs, fn: backToMe });
+  }
+  if (small || away || !cam.follow) {
+    const lab = 'Back to me', bh = 16 * S + S * 6, bw = tw(lab) + 16 * S + S * 20, f = myFarm();
+    const by = f ? vh - (16 * S + S * 8) - S * 16 - S * 6 - bh - S * 6 : vh - bh - S * 8;
+    button(Math.round(vw / 2 - bw / 2), by, bw, bh, lab, backToMe, { go: true, icon: (x0, y0) => spr(cx, 'idle', 0, 0, 32, 32, x0, y0 - S * 2, S * .5 + .01) });
+  }
 }
 function drawDistrictLabels(L, T) {
   const sm = Math.round(F * .8), pad = S * 4, placed = [];
@@ -492,7 +545,7 @@ function drawDistCard(now) {
   btns.forEach(([b, fn, en, go], i) => button(x0 + pad, y0 + pad + rows.length * lh + S * 3 + i * (bh + S * 3), w - pad * 2, bh, b, fn, { enabled: en, go }));
   button(x0 + w - 16 * S - S * 8, y0 + S * 5, 16 * S + S * 4, 16 * S + S * 4, '', () => { ui.dist = -1; }, { square: true, icon: (x, y) => ic('x', x, y) });
 }
-const FIELD_NAMES = ['North field', 'West field', 'East field', 'South field'];
+const FIELD_NAMES = ['North-west field', 'North-east field', 'South-west field', 'South-east field'];
 function subRect(k, sub) { const [x, y] = k.split('_').map(Number), r = sub === 'h' ? HOUSE_SUB : sub === null || sub === undefined ? [0, 0, LOT, LOT] : SUBS[sub]; return [x + r[0], y + r[1], r[2], r[3]]; }
 function drawLotCard(now) {
   if (!sel) return;
@@ -621,7 +674,7 @@ function drawWindow() {
     rows.forEach(([id, e, n], i) => { const c = id === me ? '#a2401f' : '#4a2a17'; text(`${i + 1}. ${id === me ? 'You' : (names[id] || 'Farmer')} · ${n} plots`, x, y + i * lh, { color: c }); text(fmt(e, 0), x + w, y + i * lh, { align: 'right', color: c }); });
   }
   if (ui.win === 'help') {
-    const tips = ['Walk with WASD or the arrow keys, or tap where to go.', 'Drag to look around. Scroll or pinch to zoom.', 'Zoom out to see the whole continent and who owns what.', 'Tap a district name to buy all its free plots at 10% off.', 'Zoom in and tap a plot with a wooden sign to buy it.', 'Buy seeds, wood and stone in the Shop.', 'Each plot has a house in the middle and four fields.', 'Pick a seed in the bar, tap a field, then Plant.', 'Or raise chickens, sheep, pigs or cows in a field.', 'Harvest crops and collect produce into storage.', 'Build houses on your plots. They mine PURR every hour.', 'Open Build to construct or upgrade. It takes a few minutes.', 'Claim storage to your wallet every 10 min (5% fee).', 'PURR and USDT here are play money for testing.', 'Art: Farm RPG Tiny Asset Pack by EmanuelleDev.'];
+    const tips = ['Walk with WASD or the arrow keys, or tap where to go.', 'Drag to look around. Scroll or pinch to zoom.', 'Zoom out to see the whole continent. Back to me finds you again.', 'Tap a district name to buy all its free plots at 10% off.', 'Zoom in and tap a plot with a wooden sign to buy it.', 'Buy seeds, wood and stone in the Shop.', 'Each plot: a house in the middle, a path to its door, four fields.', 'Pick a seed in the bar, tap a field, then Plant.', 'Or raise chickens, sheep, pigs or cows in a field.', 'Harvest crops and collect produce into storage.', 'Build houses on your plots. They mine PURR every hour.', 'Open Build to construct or upgrade. It takes a few minutes.', 'Claim storage to your wallet every 10 min (5% fee).', 'PURR and USDT here are play money for testing.', 'Art: Farm RPG Tiny Asset Pack by EmanuelleDev.'];
     const [x, y] = windowFrame('How to play', 17 * 16 * S, tips.length * lh + 16 * S * 2.4);
     tips.forEach((t, i) => text(t, x, y + i * lh, { size: Math.round(F * .9) }));
   }
@@ -676,7 +729,7 @@ function frame(t) {
   cx.fillStyle = '#0092dd'; cx.fillRect(0, 0, vw, vh);
   if (ready) {
     // ground: the continent overview underneath, sharp chunks on top when close enough
-    cx.drawImage(overview, 0, 0, MW, MH, -L * cam.z, -T * cam.z, WPXW * cam.z, WPXH * cam.z);
+    cx.drawImage(overview, 0, 0, OVW, OVH, -L * cam.z, -T * cam.z, OVW * OVT * TS * cam.z, OVH * OVT * TS * cam.z);
     const close = cam.z >= NEAR_Z;
     if (close) {
       let paints = 4;
@@ -692,10 +745,11 @@ function frame(t) {
       let drewPlayer = false;
       const detail = cam.z >= DETAIL_Z;
       for (let r = r0; r <= r1; r++) for (let q = c0; q <= c1; q++) {
-        const cell = r * CW + q, [lx, ly] = [q * CELL + 1, r * CELL + 1];
+        const cell = r * CW + q, [lx, ly] = [q * CELL + LOT_OFF, r * CELL + LOT_OFF];
         if (!drewPlayer && (ly + LOT) * TS > player.y + 40) { drawPlayer(cx, t); drewPlayer = true; }
         if (CELLPLOT[cell] >= 0) drawLot(cx, key(lx, ly), now, t, detail);
-        else if (CT[cell] === C_TOWN) spr(cx, 'fountain', (Math.floor(t / 160) % 4) * 48, 0, 48, 64, (lx + LOT / 2) * TS - 24, (ly + LOT / 2) * TS - 40);
+        if (detail && hasLights(q, r)) drawLights(cx, q, r, t);
+        if (CT[cell] === C_TOWN) spr(cx, 'fountain', (Math.floor(t / 160) % 4) * 48, 0, 48, 64, (lx + LOT / 2) * TS - 24, (ly + LOT / 2) * TS - 40);
       }
       if (!drewPlayer) drawPlayer(cx, t);
     }
@@ -704,7 +758,7 @@ function frame(t) {
     if (far > 0) {
       for (let r = r0; r <= r1; r++) for (let q = c0; q <= c1; q++) {
         const id = CELLPLOT[r * CW + q]; if (id < 0) continue; const l = land[pkey(id)]; if (!l) continue;
-        cx.globalAlpha = (l.owner === me ? .85 : .6) * far; cx.fillStyle = ownerColor(l.owner); cx.fillRect((q * CELL + 1) * TS, (r * CELL + 1) * TS, LOT * TS, LOT * TS);
+        cx.globalAlpha = (l.owner === me ? .85 : .6) * far; cx.fillStyle = ownerColor(l.owner); cx.fillRect((q * CELL + LOT_OFF) * TS, (r * CELL + LOT_OFF) * TS, LOT * TS, LOT * TS);
       }
       cx.globalAlpha = .55 * far; cx.strokeStyle = '#fff3df'; cx.lineWidth = 2 / cam.z; cx.stroke(BORDERS); cx.globalAlpha = 1;
     }
@@ -712,6 +766,7 @@ function frame(t) {
     if (ui.dist >= 0) { cx.strokeStyle = '#3b1f12'; cx.lineWidth = 6 / cam.z; cx.stroke(DIST_EDGE[ui.dist]); cx.strokeStyle = Math.floor(t / 380) % 2 ? '#fff3df' : '#f2c14e'; cx.lineWidth = 3 / cam.z; cx.stroke(DIST_EDGE[ui.dist]); }
     cx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (far > .3 && !ui.title) drawDistrictLabels(L, T);
+    if (!ui.title) drawMeMarker(t, close);
     const box = (k, sub, col, w) => { const [x, y, rw, rh] = subRect(k, sub), sx = (x * TS - cam.x) * cam.z + vw / 2, sy = (y * TS - cam.y) * cam.z + vh / 2; cx.strokeStyle = col; cx.lineWidth = w; cx.strokeRect(sx + w / 2, sy + w / 2, rw * TS * cam.z - w, rh * TS * cam.z - w); };
     if (hover && close && (hover[0] !== sel || hover[1] !== ui.sub)) box(hover[0], hover[1], 'rgba(255,243,223,.8)', 2);
     if (sel) { if (ui.sub !== null) box(sel, null, 'rgba(59,31,18,.5)', 2); box(sel, ui.sub, '#3b1f12', 5); box(sel, ui.sub, Math.floor(t / 380) % 2 ? '#fff3df' : '#f2c14e', 3); }
@@ -748,7 +803,7 @@ function endPtr(e) {
     const [wx, wy] = toWorld(x, y), k = cam.z >= NEAR_Z ? lotOfPx(wx, wy) : null;
     if (cam.z < NEAR_Z) { const d = distAtPx(wx, wy); ui.dist = d; sel = null; ui.win = null; ptrs.delete(e.pointerId); if (!ptrs.size) drag = null; return; }
     sel = k; ui.sub = k ? subOfPx(k, wx, wy) : null; ui.win = null; ui.dist = -1; cam.follow = true;
-    if (k) { const [rx, ry, rw, rh] = subRect(k, ui.sub); player.tx = (rx + rw / 2) * TS; player.ty = (ry + rh + (ui.sub === null ? .6 : .4)) * TS; }
+    if (k) { const [rx, ry, rw, rh] = subRect(k, ui.sub), [kx, ky] = k.split('_').map(Number); player.tx = ui.sub === null || ui.sub === 'h' ? (kx + 12) * TS : (rx + rw / 2) * TS; player.ty = ui.sub === null ? (ky + LOT + .5) * TS : (ry + rh + .5) * TS; }
     else if (walkable(wx, wy)) { player.tx = wx; player.ty = wy; }
   }
   ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; if (!ptrs.size) drag = null; cv.style.cursor = 'grab';
