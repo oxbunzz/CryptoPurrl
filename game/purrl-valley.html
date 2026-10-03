@@ -38,17 +38,17 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 18px; margin: 0; 
 .chip.purr b { color: #b06d0e; }
 .chip.usdt b { color: #24745f; }
 
-.stage { position: relative; height: min(80vh, 860px); min-height: 460px; border: 3px solid var(--ink); box-shadow: 5px 5px 0 var(--ink); background: #2d5a27; overflow: hidden; }
+.stage { position: relative; height: min(80vh, 860px); min-height: 460px; border: 3px solid var(--ink); box-shadow: 5px 5px 0 var(--ink); background: #379b4b; overflow: hidden; }
 canvas#map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; image-rendering: pixelated; }
 .float { position: absolute; top: 12px; left: 12px; width: min(320px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow: auto; z-index: 2; }
 .ctrl { position: absolute; top: 12px; right: 12px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; z-index: 2; max-width: 50%; }
 .ctrl button { min-width: 36px; }
-#mini { position: absolute; right: 12px; bottom: 12px; width: 168px; height: 168px; border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); image-rendering: pixelated; cursor: crosshair; z-index: 2; touch-action: none; background: #3f96c6; }
+#mini { position: absolute; right: 12px; bottom: 12px; width: 192px; height: 144px; border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); image-rendering: pixelated; cursor: crosshair; z-index: 2; touch-action: none; background: #3f96c6; }
 .hint { position: absolute; left: 12px; bottom: 10px; margin: 0; font-size: 12px; font-weight: 700; color: #fff; text-shadow: 1px 1px 0 var(--ink); z-index: 1; max-width: calc(100% - 210px); }
 .board { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; align-items: start; }
 @media (max-width: 640px) {
   .stage { height: 72vh; min-height: 380px; }
-  #mini { width: 110px; height: 110px; }
+  #mini { width: 128px; height: 96px; }
   .hint { display: none; }
   .float { top: auto; bottom: 12px; max-height: 46%; width: calc(100% - 160px); min-width: 0; padding: 10px; }
 }
@@ -93,7 +93,7 @@ svg.spark { width: 100%; height: 54px; display: block; }
   <header class="top">
     <div>
       <h1>Purrl <span>Valley</span></h1>
-      <p class="tag">Mua đất, xây nhà, trồng rau, đào PURR. Coin trong game là coin ảo để chơi thử.</p>
+      <p class="tag">Mua đất, trồng trọt, lập đồng lúa, đào PURR. Coin trong game là coin ảo để chơi thử.</p>
     </div>
     <div class="wallet" id="wallet" aria-live="polite"></div>
   </header>
@@ -105,7 +105,7 @@ svg.spark { width: 100%; height: 54px; display: block; }
       <button id="zin" aria-label="Phóng to">+</button><button id="zout" aria-label="Thu nhỏ">−</button>
       <button id="zall">Toàn cảnh</button><button id="zhome">Đất của tôi</button>
     </div>
-    <canvas id="mini" width="168" height="168" aria-label="Bản đồ thu nhỏ, bấm để nhảy tới"></canvas>
+    <canvas id="mini" width="192" height="144" aria-label="Bản đồ thu nhỏ, bấm để nhảy tới"></canvas>
     <p class="hint">Kéo chuột hoặc WASD để di chuyển · cuộn hoặc chụm hai ngón để zoom · bấm một lô đất để chọn</p>
   </div>
   <div class="board">
@@ -116,9 +116,9 @@ svg.spark { width: 100%; height: 54px; display: block; }
       <section class="card how">
         <h2>Cách chơi</h2>
         <ol>
-          <li>Nhận gói khởi đầu, rồi bấm một ô cỏ trên bản đồ để mua đất.</li>
-          <li>Mua hạt giống và gỗ, đá ở cửa hàng bằng PURR.</li>
-          <li>Trồng rau để thu hoạch, hoặc xây nhà để đào PURR theo giờ.</li>
+          <li>Nhận gói khởi đầu, rồi bấm một lô có 4 cọc gỗ để mua đất.</li>
+          <li>Mua hạt giống, gỗ và đá ở cửa hàng bằng PURR.</li>
+          <li>Trồng một vụ để thu hoạch, hoặc lập đồng lúa để đào PURR theo giờ.</li>
           <li>PURR làm ra nằm ở mục Đang đào. Cứ 10 phút được claim một lần, phí claim 5%.</li>
           <li>Bán PURR lấy USDT ở chợ, hoặc mua thêm PURR. Giá chạy theo cung cầu của mọi người chơi.</li>
         </ol>
@@ -131,7 +131,6 @@ svg.spark { width: 100%; height: 54px; display: block; }
 
 <script>
 // ---------- Game rules (prototype numbers, coin is play money) ----------
-const MAP_W = 20, MAP_H = 20;                    // 20×20 square lots
 const START = { purr: 500, usdt: 100 };
 const LAND_BASE = 100, LAND_STEP = 2;               // land price rises with every plot sold
 const CLAIM_CD = 10 * 60 * 1000, CLAIM_FEE = 0.05;
@@ -153,10 +152,10 @@ const CROPS = {   // stages: [col, bottom row, height in tiles] on the objects s
   corn:    { name: 'Ngô',    grow: 8 * 60e3,  yield: 52,  icon: [9, 1],  stages: [[10, 1, 1], [11, 1, 1], [12, 1, 1], [14, 1, 2], [15, 1, 2]] },
   pumpkin: { name: 'Bí ngô', grow: 15 * 60e3, yield: 105, icon: [9, 5],  stages: [[10, 5, 1], [11, 5, 1], [12, 5, 1], [14, 5, 2], [15, 5, 2]] },
 };
-const HOUSE = [null,
-  { name: 'Nhà gỗ',   rate: 30,  cost: { wood: 10, stone: 8 } },
-  { name: 'Nhà ngói', rate: 60,  cost: { wood: 20, stone: 16 } },
-  { name: 'Biệt thự', rate: 100, cost: { wood: 40, stone: 30 } },
+const HOUSE = [null,                                   // passive fields: rice that keeps regrowing and mines PURR
+  { name: 'Đồng cỏ non',  rate: 30,  cost: { wood: 10, stone: 8 } },
+  { name: 'Đồng lúa xanh', rate: 60,  cost: { wood: 20, stone: 16 } },
+  { name: 'Đồng lúa vàng', rate: 100, cost: { wood: 40, stone: 30 } },
 ];
 
 // ---------- State ----------
@@ -180,10 +179,8 @@ function pendingNow(f, now = Date.now()) { return (f.pending || 0) + houseRate(f
 function clone(o) { return JSON.parse(JSON.stringify(o)); }
 function accrued(f) { const g = clone(f), now = Date.now(); g.pending = pendingNow(f, now); g.accrueAt = now; return g; }
 
-// ---------- World: Stardew-style pixel art, square lots, controllable camera ----------
-const N = MAP_W, TS = 16, LT = 6, M = 5;                         // N×N lots of 6×6 tiles, margin of woods
-const lotT0 = (i) => M + i * (LT + 1) + Math.floor(i / 4) * 2;   // first tile of lot i (1-tile paths, 3-tile roads every 4 lots)
-const WT = lotT0(N - 1) + LT + M, WPX = WT * TS;                 // world size in tiles / pixels
+// ---------- World: a farm village built only from the "Pixel Lands - Farm" demo tiles ----------
+const TS = 16, MW = 128, MH = 96, WPXW = MW * TS, WPXH = MH * TS, LT = 6, LPX = LT * TS;
 function hash(a, b, c = 0) { let h = (a * 374761393 + b * 668265263 + c * 2147483647) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
 function vnoise(x, y, s, seed) {
   const gx = x / s, gy = y / s, x0 = Math.floor(gx), y0 = Math.floor(gy), fx = gx - x0, fy = gy - y0;
@@ -191,274 +188,204 @@ function vnoise(x, y, s, seed) {
   const top = a + (b - a) * sm(fx), bot = c + (d - c) * sm(fx);
   return top + (bot - top) * sm(fy);
 }
-// lot kinds: 0 lawn (for sale), 1 wild meadow, 2 shared wheat field, 4 town square
-const PK = new Uint8Array(N * N);
-const ter = (i, j) => (i < 0 || j < 0 || i >= N || j >= N ? 2 : PK[j * N + i]);
-const PLAZA = [N / 2 - 1, N / 2];
-for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-  let k = 0;
-  if (PLAZA.includes(i) && PLAZA.includes(j)) k = 4;
-  else if (vnoise(i, j, 4, 11) < .24) k = 1;
-  else if (vnoise(i, j, 3, 23) > .74) k = 2;
-  PK[j * N + i] = k;
-}
-const buyable = (i, j) => ter(i, j) === 0;
-let BUYABLE = 0; for (const k of PK) if (k === 0) BUYABLE++;
-const lotPx = (i, j) => [lotT0(i) * TS, lotT0(j) * TS];
-const LPX = LT * TS;
-function lotOfPx(x, y) {
-  const f = (v) => { const t = Math.floor(v / TS); for (let i = 0; i < N; i++) { const a = lotT0(i); if (t >= a && t < a + LT) return i; if (t < a) return -1; } return -1; };
-  const i = f(x), j = f(y); return i >= 0 && j >= 0 ? key(i, j) : null;
-}
-
-// ---- art: "Pixel Lands - Farm" demo by Trislin (trislin.itch.io/pixel-lands-farm) ----
+// art: "Pixel Lands - Farm" demo by Trislin (trislin.itch.io/pixel-lands-farm)
 const SHEET = { ter: new Image(), obj: new Image() };
 SHEET.ter.src = 'data:image/png;base64,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';
 SHEET.obj.src = 'data:image/png;base64,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';
-const sheetsReady = Promise.all(Object.values(SHEET).map((im) => im.decode ? im.decode() : new Promise((ok) => (im.onload = ok))));
+const sheetsReady = Promise.all(Object.values(SHEET).map((im) => (im.decode ? im.decode() : new Promise((ok) => (im.onload = ok)))));
 function tile(g, sheet, c, r, x, y, h = 1) { g.drawImage(SHEET[sheet], c * 16, (r - h + 1) * 16, 16, 16 * h, Math.round(x), Math.round(y - (h - 1) * 16), 16, 16 * h); }
-// ground kinds per tile: 0 margin grass, 1 dirt path, 2 stone road, 3 lot
-const GT = new Uint8Array(WT * WT);
-(function () {
-  const isMainRoad = (t) => { for (let b = 1; b < N / 4; b++) { const s = lotT0(b * 4) - 3; if (t >= s && t < s + 3) return true; } return false; };
-  for (let ty = 0; ty < WT; ty++) for (let tx = 0; tx < WT; tx++) {
-    let g = 0;
-    if (tx >= M - 1 && ty >= M - 1 && tx <= WT - M && ty <= WT - M) {
-      g = 1;
-      if (isMainRoad(tx) || isMainRoad(ty)) g = 2;
-      else { let li = -1, lj = -1; for (let i = 0; i < N; i++) { const a = lotT0(i); if (tx >= a && tx < a + LT) li = i; if (ty >= a && ty < a + LT) lj = i; } if (li >= 0 && lj >= 0) g = 3; }
-    }
-    GT[ty * WT + tx] = g;
-  }
-  const a = lotT0(PLAZA[0]), b = lotT0(PLAZA[1]) + LT;
-  for (let ty = a; ty < b; ty++) for (let tx = a; tx < b; tx++) GT[ty * WT + tx] = 2;
+
+// ---- map: a stone square in the middle, winding dirt roads, lots strung along them ----
+const GROUND = new Uint8Array(MW * MH);          // 0 grass, 1 dirt road, 2 stone square
+const USED = new Uint8Array(MW * MH);            // 1 lot, 2 wheat field, 3 decoration
+const at = (x, y) => y * MW + x;
+const inMap = (x, y) => x >= 0 && y >= 0 && x < MW && y < MH;
+const CX = MW / 2, CY = MH / 2, EDGE = 3;
+function road(x, y, w = 2, kind = 1) { for (let dy = 0; dy < w; dy++) for (let dx = 0; dx < w; dx++) { const X = Math.round(x) + dx, Y = Math.round(y) + dy; if (inMap(X, Y) && X >= EDGE && Y >= EDGE && X < MW - EDGE && Y < MH - EDGE && GROUND[at(X, Y)] !== 2) GROUND[at(X, Y)] = kind; } }
+function segment(x0, y0, x1, y1, w) { const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 2); for (let i = 0; i <= n; i++) road(x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n, w); }
+(function genMap() {
+  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (Math.hypot((x - CX + .5) / 1.15, y - CY + .5) < 6.5) GROUND[at(x, y)] = 2;
+  // gently curving streets, two across and four down plus two across between, and two diagonal lanes from the square
+  for (let y0 = EDGE + 6; y0 < MH - EDGE - 4; y0 += 15) if (Math.abs(y0 - CY) > 5) for (let x = EDGE; x < MW - EDGE; x++) road(x, y0 + Math.round(Math.sin(x / 9 + y0) * 1.1), 2);
+  for (let x0 = EDGE + 7; x0 < MW - EDGE - 4; x0 += 17) if (Math.abs(x0 - CX) > 6) for (let y = EDGE; y < MH - EDGE; y++) road(x0 + Math.round(Math.sin(y / 8 + x0) * 1.1), y, 2);
+  for (let y = EDGE; y < MH - EDGE; y++) if (Math.abs(y - CY) > 5) road(CX - 1 + Math.round(Math.sin(y / 7) * 1.5), y, 2);
+  for (let x = EDGE; x < MW - EDGE; x++) if (Math.abs(x - CX) > 6) road(x, CY - 1 + Math.round(Math.sin(x / 6) * 1.2), 2);
+  for (const [dx, dy] of [[1, 1], [-1, -1], [1, -1], [-1, 1]]) { let x = CX + dx * 6, y = CY + dy * 5; for (let n = 0; n < 9; n++) { segment(x, y, x + dx * 1.6, y + dy * 1.2, 2); x += dx * 1.6; y += dy * 1.2; } }
 })();
-const gt = (tx, ty) => (tx < 0 || ty < 0 || tx >= WT || ty >= WT ? 0 : GT[ty * WT + tx]);
-const world = document.createElement('canvas'); world.width = WPX; world.height = WPX;
+const isRoad = (x, y) => inMap(x, y) && GROUND[at(x, y)] > 0;
+// lots: 6×6, a free grass ring around them, and a road within two tiles
+const PLOTS = [], PID = new Int16Array(MW * MH).fill(-1);
+(function placeLots() {
+  const cand = [];
+  for (let y = EDGE + 1; y < MH - EDGE - LT; y++) for (let x = EDGE + 1; x < MW - EDGE - LT; x++) cand.push([x, y, Math.hypot(x + 3 - CX, (y + 3 - CY) * 1.3)]);
+  cand.sort((a, b) => a[2] - b[2]);
+  for (const [x, y] of cand) {
+    let ok = true, near = false;
+    for (let dy = 0; dy < LT && ok; dy++) for (let dx = 0; dx < LT; dx++) { const X = x + dx, Y = y + dy; if (!inMap(X, Y) || GROUND[at(X, Y)] || USED[at(X, Y)]) { ok = false; break; } }
+    if (!ok) continue;
+    for (let dy = -3; dy <= LT + 2 && !near; dy++) for (let dx = -3; dx <= LT + 2; dx++) if (isRoad(x + dx, y + dy)) { near = true; break; }
+    if (!near) continue;
+    const id = PLOTS.length; PLOTS.push([x, y]);
+    for (let dy = -1; dy <= LT; dy++) for (let dx = -1; dx <= LT; dx++) if (inMap(x + dx, y + dy)) USED[at(x + dx, y + dy)] = 1;
+    for (let dy = 0; dy < LT; dy++) for (let dx = 0; dx < LT; dx++) PID[at(x + dx, y + dy)] = id;
+  }
+  // a footpath around every lot, so lot edges read clearly
+  for (const [x, y] of PLOTS) for (let dy = -1; dy <= LT; dy++) for (let dx = -1; dx <= LT; dx++) if ((dx < 0 || dy < 0 || dx >= LT || dy >= LT) && inMap(x + dx, y + dy) && !GROUND[at(x + dx, y + dy)]) GROUND[at(x + dx, y + dy)] = 1;
+})();
+// shared wheat fields in the larger open spaces
+const FIELDS = [];
+for (let y = EDGE + 2; y < MH - EDGE - 6; y += 2) for (let x = EDGE + 2; x < MW - EDGE - 6; x += 2) {
+  if (hash(x, y, 21) > .5) continue;
+  let ok = true;
+  for (let dy = -1; dy <= 5 && ok; dy++) for (let dx = -1; dx <= 5; dx++) if (GROUND[at(x + dx, y + dy)] || USED[at(x + dx, y + dy)]) { ok = false; break; }
+  if (!ok) continue;
+  FIELDS.push([x, y]);
+  for (let dy = -1; dy <= 5; dy++) for (let dx = -1; dx <= 5; dx++) USED[at(x + dx, y + dy)] = 2;
+}
+const PLOT_INDEX = Object.fromEntries(PLOTS.map(([x, y], n) => [key(x, y), n]));
+const buyable = (x, y) => key(x, y) in PLOT_INDEX;
+const ter = () => 1;
+const BUYABLE = PLOTS.length;
+const lotPx = (x, y) => [x * TS, y * TS];
+const lotNo = (k) => PLOT_INDEX[k] + 1;
+function lotOfPx(px, py) { const x = Math.floor(px / TS), y = Math.floor(py / TS); if (!inMap(x, y)) return null; const id = PID[at(x, y)]; return id < 0 ? null : key(...PLOTS[id]); }
+
+// ---- painting the static world ----
+const world = document.createElement('canvas'); world.width = WPXW; world.height = WPXH;
 const wg = world.getContext('2d');
-const GRASS = () => [13, 0];
-function grassTile(tx, ty) { const r = hash(tx, ty, 7); return r < .1 ? [12, 0] : r < .17 ? [12, 1] : r < .23 ? [13, 1] : r < .3 ? [12, 2] : [13, 0]; }
-// a 6×6 block of the grass island (lot) or the tilled-soil island (field), edge pieces by position
-function islandTile(lx, ly, field) {
-  const ox = 8, oy = field ? 4 : 0, L = lx === 0, R = lx === LT - 1, T = ly === 0, B = ly === LT - 1;
-  if (T && L) return [ox, oy]; if (T && R) return [ox + 3, oy]; if (B && L) return [ox, oy + 3]; if (B && R) return [ox + 3, oy + 3];
-  if (T) return [ox + 1, oy]; if (B) return [ox + 1, oy + 3]; if (L) return [ox, oy + 1]; if (R) return [ox + 3, oy + 1];
-  return field ? [9, 5] : null;
+function grassTile(x, y) { const r = hash(x, y, 7); return r < .08 ? [12, 0] : r < .14 ? [12, 1] : r < .19 ? [13, 1] : r < .25 ? [12, 2] : [13, 0]; }
+// grass meeting dirt: pick the edge piece from which neighbours are road
+function grassEdge(x, y) {
+  const N = isRoad(x, y - 1), S = isRoad(x, y + 1), W = isRoad(x - 1, y), E = isRoad(x + 1, y), n = N + S + W + E;
+  if (!n) return null;
+  if (n === 4) return [0, 3];
+  if (n === 3) return !S ? [0, 0] : !N ? [0, 2] : !E ? [1, 3] : [3, 3];
+  if (N && S) return [2, 3];
+  if (W && E) return [0, 1];
+  if (N && W) return [8, 0]; if (N && E) return [11, 0]; if (S && W) return [8, 3]; if (S && E) return [11, 3];
+  if (N) return [9, 0]; if (S) return [9, 3]; if (W) return [8, 1]; return [11, 1];
+}
+function islandTile(lx, ly, w, field) {      // tilled-soil block, edge pieces by position
+  const oy = field ? 4 : 0, L = lx === 0, R = lx === w - 1, T = ly === 0, B = ly === w - 1;
+  if (T && L) return [8, oy]; if (T && R) return [11, oy]; if (B && L) return [8, oy + 3]; if (B && R) return [11, oy + 3];
+  if (T) return [9, oy]; if (B) return [9, oy + 3]; if (L) return [8, oy + 1]; if (R) return [11, oy + 1];
+  return [9, 5];
 }
 function paintGround() {
-  for (let ty = 0; ty < WT; ty++) for (let tx = 0; tx < WT; tx++) {
-    const x = tx * TS, y = ty * TS, k = gt(tx, ty);
-    if (k === 0) { const [c, r] = grassTile(tx, ty); tile(wg, 'ter', c, r, x, y); continue; }
-    if (k === 1) { const h = hash(tx, ty, 3); tile(wg, 'ter', h < .12 ? 12 : h < .2 ? 13 : 13, h < .2 ? 4 : 2, x, y); continue; }
-    if (k === 2) { tile(wg, 'ter', 13, 2, x, y); tile(wg, 'ter', (tx + ty) % 2 ? 12 : 13, 3, x, y); continue; }
-    // lot tile: find which lot and where inside it
-    const key0 = lotOfPx(x + 1, y + 1); if (!key0) continue;
-    const [i, j] = key0.split('_').map(Number), lx = tx - lotT0(i), ly = ty - lotT0(j), field = ter(i, j) === 2;
-    tile(wg, 'ter', 13, 2, x, y);
-    const e = islandTile(lx, ly, field);
-    if (e) tile(wg, 'ter', e[0], e[1], x, y); else { const [c, r] = grassTile(tx, ty); tile(wg, 'ter', c, r, x, y); }
+  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+    const X = x * TS, Y = y * TS, g = GROUND[at(x, y)];
+    tile(wg, 'ter', 13, 2, X, Y);
+    if (g === 1) { const h = hash(x, y, 3); if (h < .14) tile(wg, 'ter', h < .07 ? 12 : 13, 4, X, Y); continue; }
+    if (g === 2) { tile(wg, 'ter', (x + y) % 2 ? 12 : 13, 3, X, Y); continue; }
+    const e = grassEdge(x, y);
+    if (e) tile(wg, 'ter', e[0], e[1], X, Y); else { const [c, r] = grassTile(x, y); tile(wg, 'ter', c, r, X, Y); }
   }
+  for (const [fx, fy] of FIELDS) for (let ly = 0; ly < 5; ly++) for (let lx = 0; lx < 5; lx++) { const t = islandTile(lx, ly, 5, true); tile(wg, 'ter', 13, 2, (fx + lx) * TS, (fy + ly) * TS); tile(wg, 'ter', t[0], t[1], (fx + lx) * TS, (fy + ly) * TS); }
 }
-// ---- sprites ----
-function sprite(w, h, fn) {
-  const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d');
-  // R(x, y, colour) paints one pixel; R(x, y, w, h, colour) paints a rectangle
-  fn(g, (x, y, a, b, col) => { if (typeof a === 'string') { g.fillStyle = a; g.fillRect(x, y, 1, 1); } else { g.fillStyle = col; g.fillRect(x, y, a, b); } });
-  return c;
-}
-const shadeC = (hex, f) => { const n = parseInt(hex.slice(1), 16), m = (v) => Math.max(0, Math.min(255, Math.round(v * f))); return `rgb(${m(n >> 16)},${m((n >> 8) & 255)},${m(n & 255)})`; };
-function canopy(g, R, circles, cols, outline, seed) {
-  const inC = (x, y) => circles.some(([cx, cy, r]) => (x - cx) ** 2 + (y - cy) ** 2 <= r * r);
-  const W = g.canvas.width, H = g.canvas.height;
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    if (!inC(x, y)) continue;
-    if (!inC(x - 1, y) || !inC(x + 1, y) || !inC(x, y - 1) || !inC(x, y + 1)) { R(x, y, outline); continue; }
-    let best = 1e9, bc = null; for (const c of circles) { const d = (x - c[0]) ** 2 + (y - c[1]) ** 2 - c[2] * c[2]; if (d < best) { best = d; bc = c; } }
-    const lx = (x - bc[0]) / bc[2], ly = (y - bc[1]) / bc[2], l = -lx * .55 - ly * .8 + (hash(x, y, seed) - .5) * .5;
-    R(x, y, cols[l > .55 ? 3 : l > .05 ? 2 : l > -.45 ? 1 : 0]);
-  }
-}
-const SPR = {};
-function makeSprites() {
-  SPR.sign = sprite(16, 20, (g, R) => {
-    g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(5, 18, 8, 2);
-    R(7, 8, 3, 11, '#2b1d14'); R(8, 8, 1, 11, '#8a5a32');
-    R(1, 2, 14, 9, '#2b1d14'); R(2, 3, 12, 7, '#e6c48a'); R(2, 3, 12, 1, '#f4dcaa'); R(2, 9, 12, 1, '#c9a26b');
-    R(6, 4, 4, 4, '#2b1d14'); R(7, 4, 2, 4, '#ffd23f'); R(6, 5, 4, 2, '#ffd23f'); R(7, 5, 1, 1, '#fff2a8');
-  });
-  // fountain with the Purrl statue
-  SPR.fountain = sprite(72, 64, (g, R) => {
-    g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(37, 50, 33, 12, 0, 0, 7); g.fill();
-    g.fillStyle = '#2b2433'; g.beginPath(); g.ellipse(36, 46, 34, 14, 0, 0, 7); g.fill();
-    g.fillStyle = '#9d968b'; g.beginPath(); g.ellipse(36, 45, 33, 13, 0, 0, 7); g.fill();
-    g.fillStyle = '#c4bdb1'; g.beginPath(); g.ellipse(36, 43, 32, 12, 0, 0, 7); g.fill();
-    g.fillStyle = '#3a7fc4'; g.beginPath(); g.ellipse(36, 43, 27, 9, 0, 0, 7); g.fill();
-    g.fillStyle = '#4b97d6'; g.beginPath(); g.ellipse(36, 42, 25, 7.5, 0, 0, 7); g.fill();
-    [[18, 40], [50, 44], [28, 47], [46, 39]].forEach(([x, y]) => R(x, y, 4, 1, '#bfe6fb'));
-    R(30, 30, 12, 14, '#2b2433'); R(31, 30, 10, 13, '#b8b0a4'); R(31, 30, 3, 13, '#9d968b'); R(31, 30, 10, 2, '#d8d2c6');
-    const LOGO = ['###.........', '###......###', '###......###', '############', '############', '############', '############', '############', '############', '############', '.##########.'];
-    LOGO.forEach((row, y) => [...row].forEach((c, x) => { if (c === '#') R(24 + 2 * x, 6 + 2 * y, 2, 2, x < 2 ? '#d9c9a4' : y < 1 ? '#fff8ea' : '#f4e9d0'); }));
-    for (let y = 0; y < 11; y++) for (let x = 0; x < 12; x++) { const on = LOGO[y][x] === '#', nb = (a, b) => b >= 0 && b < 11 && a >= 0 && a < 12 && LOGO[b][a] === '#'; if (on && (!nb(x - 1, y) || !nb(x + 1, y) || !nb(x, y - 1) || !nb(x, y + 1))) R(24 + 2 * x, 6 + 2 * y, 2, 2, '#5a4a3a'); }
-    R(37, 15, 2, 4, '#2b2433'); R(45, 15, 2, 4, '#2b2433'); R(40, 21, 4, 1, '#2b2433');
-    R(14, 32, 2, 6, '#bfe6fb'); R(56, 32, 2, 6, '#bfe6fb'); R(13, 30, 4, 2, '#ffffff'); R(55, 30, 4, 2, '#ffffff');
-  });
-}
-const WALLS = ['#e8d2b0', '#f4e3c8', '#cfe0ea', '#f2d0c4', '#dfe8c6'];
-const ROOFC = ['#b8442f', '#3f6fae', '#6a8a3a', '#8a4a8a', '#a8623a'];
-const houseCache = {};
-function houseSprite(level, wall, roof) {
-  const id = level + wall + roof; if (houseCache[id]) return houseCache[id];
-  const W = [0, 46, 58, 70][level], WH = [0, 20, 24, 28][level], RH = [0, 22, 26, 30][level], OV = 4;
-  const SW = W + OV * 2 + 4, SH = RH + WH + 18;
-  const dk = '#2b1d14', wallD = shadeC(wall, .82), roofD = shadeC(roof, .78), roofL = shadeC(roof, 1.18);
-  return (houseCache[id] = sprite(SW, SH, (g, R) => {
-    const wx0 = OV + 2, wy0 = 10 + RH, rx0 = 2, ry0 = 10;
-    g.fillStyle = 'rgba(0,0,0,.28)'; g.fillRect(wx0 + 4, wy0 + 3, W, WH);                                   // cast shadow
-    // walls
-    R(wx0 - 1, wy0 - 1, W + 2, WH + 2, dk); R(wx0, wy0, W, WH, wall);
-    for (let y = wy0 + 3; y < wy0 + WH - 4; y += 4) R(wx0, y, W, 1, wallD);
-    R(wx0, wy0 + WH - 4, W, 4, '#8f8a82'); for (let x = wx0; x < wx0 + W; x += 5) R(x, wy0 + WH - 4, 1, 4, '#6f6a63');
-    R(wx0, wy0, 2, WH, wallD);
-    R(wx0, wy0, W, 3, 'rgba(0,0,0,.25)');                                                                // eave shadow
-    // door
-    const dx = wx0 + Math.floor(W / 2) - 5, dy = wy0 + WH - 17;
-    R(dx - 1, dy - 1, 12, 17, dk); R(dx, dy, 10, 16, '#7a4a2a'); R(dx + 1, dy + 1, 3, 6, '#94603a'); R(dx + 6, dy + 1, 3, 6, '#94603a'); R(dx + 1, dy + 9, 3, 5, '#94603a'); R(dx + 6, dy + 9, 3, 5, '#94603a'); R(dx + 7, dy + 8, 2, 2, '#ffd23f');
-    R(dx - 2, wy0 + WH, 14, 2, '#b8b0a4');
-    // windows
-    const win = (x, y) => {
-      R(x - 1, y - 1, 12, 11, dk); R(x, y, 10, 9, level === 1 ? '#a8723c' : '#ffffff'); R(x + 1, y + 1, 8, 7, '#8fd3f5'); R(x + 1, y + 1, 3, 2, '#d8f3ff'); R(x + 5, y + 1, 1, 7, level === 1 ? '#a8723c' : '#ffffff'); R(x + 1, y + 4, 8, 1, level === 1 ? '#a8723c' : '#ffffff');
-      if (level === 3) { R(x - 1, y + 10, 12, 3, '#8a5a32'); [1, 4, 7].forEach((f, n) => R(x + f, y + 9, 2, 2, n % 2 ? '#ffd23f' : '#ff6f8f')); }
-    };
-    win(wx0 + 5, wy0 + 5); win(wx0 + W - 15, wy0 + 5);
-    if (level === 3) win(wx0 + Math.floor(W / 2) - 5 + 17, wy0 + 5);
-    // roof: shingle rows tapering toward the ridge
-    const rows = Math.floor(RH / 4);
-    R(rx0 - 1, ry0 - 1, W + OV * 2 + 2, RH + 2, dk);
-    for (let r = 0; r < rows; r++) {
-      const y = ry0 + r * 4, inset = Math.max(0, Math.floor((rows - 1 - r) * .6)), x0 = rx0 + inset, w = W + OV * 2 - inset * 2;
-      R(x0, y, w, 4, r % 2 ? roof : shadeC(roof, .93)); R(x0, y + 3, w, 1, roofD);
-      for (let x = x0 + (r % 2 ? 3 : 0); x < x0 + w; x += 6) R(x, y, 1, 3, roofD);
-      if (inset > 0) { R(x0 - inset, y, inset, 4, 'rgba(0,0,0,0)'); g.clearRect(rx0 - 1, y, inset + 1, 4); g.clearRect(rx0 + W + OV * 2 - inset, y, inset + 1, 4); R(x0 - 1, y, 1, 4, dk); R(x0 + w, y, 1, 4, dk); }
-    }
-    R(rx0 + Math.floor(rows * .6), ry0, W + OV * 2 - Math.floor(rows * .6) * 2, 2, roofL);                        // ridge
-    R(rx0, ry0 + RH - 2, W + OV * 2, 2, roofD);                                                               // eave
-    if (level >= 2) { const cx = rx0 + W + OV * 2 - 18; R(cx - 1, ry0 - 9, 10, 14, dk); R(cx, ry0 - 8, 8, 12, '#a8503a'); for (let y = ry0 - 8; y < ry0 + 4; y += 3) R(cx, y, 8, 1, '#7a3628'); R(cx - 1, ry0 - 10, 10, 2, '#5a4a3a'); }
-    if (level === 3) { R(wx0 + Math.floor(W / 2) - 13, wy0 + WH - 22, 26, 3, roofD); R(wx0 + Math.floor(W / 2) - 13, wy0 + WH - 19, 2, 19, '#ffffff'); R(wx0 + Math.floor(W / 2) + 11, wy0 + WH - 19, 2, 19, '#ffffff'); }
-  }));
-}
-const mailCache = {};
-const mailbox = (col) => mailCache[col] || (mailCache[col] = sprite(10, 16, (g, R) => { g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(2, 14, 7, 2); R(4, 6, 2, 9, '#5e381f'); R(0, 1, 10, 7, '#2b1d14'); R(1, 2, 8, 5, col); R(1, 2, 8, 1, 'rgba(255,255,255,.4)'); R(8, 0, 1, 4, '#e8344f'); R(8, 0, 2, 2, '#e8344f'); }));
-
-// ---- static scenery: bushes and tall grass around the edge, meadows, the shared wheat fields, the square ----
 function paintScenery() {
-  const items = [];                                    // [draw(y-sorted), bottom y]
-  const obj = (c, r, x, y, h = 1) => items.push([() => tile(wg, 'obj', c, r, x, y, h), y + 16]);
-  for (let ty = 0; ty < WT; ty++) for (let tx = 0; tx < WT; tx++) {
-    if (gt(tx, ty) !== 0) continue;
-    const h = hash(tx, ty, 11), x = tx * TS, y = ty * TS;
-    if (h < .34) obj(h < .17 ? 5 : 6, 0, x, y); else if (h < .44) obj(4, 7, x, y, 2); else if (h < .52) obj(h < .48 ? 2 : 3, 7, x, y); else if (h < .55) obj(4, 1, x, y);
+  const items = [];
+  const obj = (c, r, x, y, h = 1) => items.push([() => tile(wg, 'obj', c, r, x * TS, y * TS, h), y]);
+  for (let y = 1; y < MH; y++) for (let x = 0; x < MW; x++) {
+    if (GROUND[at(x, y)] || USED[at(x, y)] === 1 || USED[at(x, y)] === 2) continue;
+    const edge = x < EDGE || y < EDGE || x >= MW - EDGE || y >= MH - EDGE, h = hash(x, y, 11), n = vnoise(x, y, 6, 4);
+    if (edge) { if (h < .55) obj(h < .3 ? 5 : 6, 0, x, y); else if (h < .75) obj(h < .65 ? 4 : 5, 7, x, y, 2); continue; }
+    if (n > .66 && h < .4) obj(h < .2 ? 5 : 6, 0, x, y);
+    else if (n > .56 && h < .25) obj(h < .12 ? 4 : 5, 7, x, y, 2);
+    else if (h < .05) obj(h < .025 ? 2 : 3, 7, x, y);
+    else if (h < .065) obj(4, 1, x, y);
   }
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-    const k = ter(i, j), tx0 = lotT0(i), ty0 = lotT0(j);
-    if (k === 1) for (let ly = 1; ly < LT - 1; ly++) for (let lx = 1; lx < LT - 1; lx++) {
-      const h = hash(tx0 + lx, ty0 + ly, 13), x = (tx0 + lx) * TS, y = (ty0 + ly) * TS;
-      if (h < .22) obj(h < .11 ? 5 : 6, 0, x, y); else if (h < .42) obj(h < .32 ? 4 : 5, 7, x, y, 2); else if (h < .55) obj(h < .48 ? 2 : 3, 7, x, y); else if (h < .6) obj(4, 1, x, y);
-    }
-    if (k === 2) for (let ly = 1; ly < LT - 1; ly++) for (let lx = 1; lx < LT - 1; lx++) obj(hash(i, j, lx + ly * 7) < .8 ? 7 : 6, 7, (tx0 + lx) * TS, (ty0 + ly) * TS, 2);
-  }
-  const pc = lotPx(PLAZA[0], PLAZA[0])[0] + LPX + TS / 2;
-  items.push([() => wg.drawImage(SPR.fountain, pc - 36, pc - 40), pc + 24]);
-  [[-44, -44], [44, -44], [-44, 44], [44, 44]].forEach(([a, b]) => obj(5, 0, pc + a - 8, pc + b - 8));
+  for (const [fx, fy] of FIELDS) for (let ly = 0; ly < 5; ly++) for (let lx = 0; lx < 5; lx++) obj(hash(fx + lx, fy + ly, 5) < .82 ? 7 : 6, 7, fx + lx, fy + ly, 2);
+  // the square: stepping-stone rings and bushes
+  for (let n = 0; n < 8; n++) { const a = n / 8 * Math.PI * 2; obj(5, 0, Math.round(CX + Math.cos(a) * 4.2 - .5), Math.round(CY + Math.sin(a) * 3.6 - .5)); }
+  obj(5, 2, CX - 1, CY - 1); obj(4, 3, CX, CY - 1);
   items.sort((a, b) => a[1] - b[1]); items.forEach(([f]) => f());
 }
 
-// ---- camera and frame ----
+// ---- lots drawn every frame: posts on unsold lots, fence + field on owned ones ----
+function drawFence(g, x0, y0) {
+  const R = x0 + (LT - 1) * TS, B = y0 + (LT - 1) * TS;
+  for (let n = 1; n < LT - 1; n++) { tile(g, 'obj', 3, 1, x0, y0 + n * TS); tile(g, 'obj', 3, 1, R, y0 + n * TS); }
+  for (let n = 0; n < LT; n++) tile(g, 'obj', n === 0 ? 0 : n === LT - 1 ? 2 : 1, 0, x0 + n * TS, y0);
+  for (let n = 0; n < LT; n++) if (n !== 2 && n !== 3) tile(g, 'obj', n === 0 || n === 4 ? 0 : n === 1 || n === LT - 1 ? 2 : 1, 3, x0 + n * TS, B);
+}
+const FIELD_LOOK = [null, [[4, 7, 2]], [[5, 7, 2], [6, 7, 2]], [[7, 7, 2]]];
+function drawLot(g, k, now) {
+  const [x, y] = k.split('_').map(Number), [x0, y0] = lotPx(x, y), l = land[k];
+  if (!l) { for (const [a, b] of [[0, 0], [LT - 1, 0], [0, LT - 1], [LT - 1, LT - 1]]) tile(g, 'obj', 3, 3, x0 + a * TS, y0 + b * TS); return; }
+  const f = farms[l.owner], p = f && f.plots && f.plots[k];
+  if (p && (p.kind === 'crop' || p.kind === 'house')) {
+    for (let ly = 0; ly < 4; ly++) for (let lx = 0; lx < 4; lx++) { const t = islandTile(lx, ly, 4, true); tile(g, 'ter', 13, 2, x0 + (lx + 1) * TS, y0 + (ly + 1) * TS); tile(g, 'ter', t[0], t[1], x0 + (lx + 1) * TS, y0 + (ly + 1) * TS); }
+  }
+  if (p && p.kind === 'crop') {
+    const c = CROPS[p.crop], t = (now - p.plantedAt) / c.grow, st = c.stages[t >= 1 ? 4 : t > .7 ? 3 : t > .45 ? 2 : t > .2 ? 1 : 0];
+    for (let ly = 1; ly < LT - 1; ly++) for (let lx = 1; lx < LT - 1; lx++) tile(g, 'obj', st[0], st[1], x0 + lx * TS, y0 + ly * TS, st[2]);
+  } else if (p && p.kind === 'house') {
+    const look = FIELD_LOOK[p.level];
+    for (let ly = 1; ly < LT - 1; ly++) for (let lx = 1; lx < LT - 1; lx++) { const s = look[(lx + ly) % look.length]; tile(g, 'obj', s[0], s[1], x0 + lx * TS, y0 + ly * TS, s[2]); }
+    if (p.level === 3) tile(g, 'obj', 5, 2, x0 + 4 * TS, y0 + 4 * TS);
+  } else { tile(g, 'obj', 6, 2, x0 + 2 * TS, y0 + 4 * TS); tile(g, 'obj', 7, 2, x0 + 3 * TS, y0 + 4 * TS); }
+  drawFence(g, x0, y0);
+  g.fillStyle = '#2b1d14'; g.fillRect(x0 + 2 * TS - 4, y0 + (LT - 1) * TS - 2, 6, 5);                      // owner ribbon on the gate post
+  g.fillStyle = l.owner === me ? '#f2a93b' : (colors[l.owner] || '#8a7a9a'); g.fillRect(x0 + 2 * TS - 3, y0 + (LT - 1) * TS - 1, 4, 3);
+}
+
+// ---- camera, frame, minimap, input ----
 const stage = $('stage'), cv = $('map'), cx = cv.getContext('2d');
-const cam = { x: WPX / 2, y: WPX / 2, z: 3 };
+const cam = { x: WPXW / 2, y: WPXH / 2, z: 3 };
 let vw = 0, vh = 0, dpr = 1, hover = null;
-const minZ = () => Math.max(vw / WPX, vh / WPX);
+const minZ = () => Math.max(vw / WPXW, vh / WPXH);
 function clampCam() {
   cam.z = Math.min(8, Math.max(minZ(), cam.z));
   const hw = vw / 2 / cam.z, hh = vh / 2 / cam.z;
-  cam.x = Math.min(WPX - hw, Math.max(hw, cam.x)); cam.y = Math.min(WPX - hh, Math.max(hh, cam.y));
+  cam.x = Math.min(WPXW - hw, Math.max(hw, cam.x)); cam.y = Math.min(WPXH - hh, Math.max(hh, cam.y));
 }
 function resize() { const r = cv.getBoundingClientRect(); dpr = window.devicePixelRatio || 1; vw = r.width; vh = r.height; cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr); clampCam(); }
 const toWorld = (sx, sy) => [cam.x + (sx - vw / 2) / cam.z, cam.y + (sy - vh / 2) / cam.z];
 function zoomAt(f, sx, sy) { const [a, b] = toWorld(sx, sy); cam.z *= f; clampCam(); const [c, d] = toWorld(sx, sy); cam.x += a - c; cam.y += b - d; clampCam(); }
 let fly = null;
 function flyTo(x, y, z) { fly = { t0: performance.now(), x0: cam.x, y0: cam.y, z0: cam.z, x, y, z: z || cam.z }; }
-function drawFence(g, x0, y0) {
-  const R = x0 + (LT - 1) * TS, B = y0 + (LT - 1) * TS;
-  for (let n = 1; n < LT - 1; n++) { tile(g, 'obj', 3, 1, x0, y0 + n * TS); tile(g, 'obj', 3, 1, R, y0 + n * TS); }
-  for (let n = 0; n < LT; n++) tile(g, 'obj', n === 0 ? 0 : n === LT - 1 ? 2 : 1, 0, x0 + n * TS, y0);
-  const gate = [2, 3];                                                                  // opening at the front
-  for (let n = 0; n < LT; n++) if (!gate.includes(n)) tile(g, 'obj', n === 0 || n === 4 ? 0 : n === 1 || n === LT - 1 ? 2 : 1, 3, x0 + n * TS, B);
+function outline(k, col, w) {
+  const [x, y] = k.split('_').map(Number), sx = (x * TS - cam.x) * cam.z + vw / 2, sy = (y * TS - cam.y) * cam.z + vh / 2, s = LPX * cam.z;
+  cx.strokeStyle = col; cx.lineWidth = w; cx.strokeRect(sx + w / 2, sy + w / 2, s - w, s - w);
 }
-function drawLot(g, k, now) {
-  const [i, j] = k.split('_').map(Number), [x0, y0] = lotPx(i, j), l = land[k];
-  if (!l) { g.drawImage(SPR.sign, x0 + LPX - 26, y0 + LPX - 26); return; }
-  const f = farms[l.owner], p = f && f.plots && f.plots[k];
-  if (p && p.kind === 'crop') {
-    for (let ly = 0; ly < LT; ly++) for (let lx = 0; lx < LT; lx++) { const e = islandTile(lx, ly, true); tile(g, 'ter', 13, 2, x0 + lx * TS, y0 + ly * TS); tile(g, 'ter', e[0], e[1], x0 + lx * TS, y0 + ly * TS); }
-    const c = CROPS[p.crop], t = (now - p.plantedAt) / c.grow, st = c.stages[t >= 1 ? 4 : t > .7 ? 3 : t > .45 ? 2 : t > .2 ? 1 : 0];
-    for (let ly = 1; ly < LT - 1; ly++) for (let lx = 1; lx < LT - 1; lx++) tile(g, 'obj', st[0], st[1], x0 + lx * TS, y0 + ly * TS, st[2]);
-  } else {
-    tile(g, 'obj', 6, 2, x0 + 2 * TS, y0 + 4 * TS); tile(g, 'obj', 7, 2, x0 + 3 * TS, y0 + 4 * TS);       // stepping stones to the gate
-  }
-  if (p && p.kind === 'house') {
-    const s = houseSprite(p.level, WALLS[Math.floor(hash(i, j, 1) * 5)], ROOFC[Math.floor(hash(j, i, 2) * 5)]);
-    g.drawImage(s, Math.round(x0 + LPX / 2 - s.width / 2), y0 + LPX - 30 - s.height + 8);
-  }
-  drawFence(g, x0, y0);
-  g.drawImage(mailbox(l.owner === me ? '#f2a93b' : (colors[l.owner] || '#8a7a9a')), x0 + LPX / 2 + 18, y0 + LPX - 18);
-}
-function lotRectScreen(k) { const [i, j] = k.split('_').map(Number), [x0, y0] = lotPx(i, j); return [(x0 - cam.x) * cam.z + vw / 2, (y0 - cam.y) * cam.z + vh / 2, LPX * cam.z]; }
-function outline(k, col, w) { const [x, y, s] = lotRectScreen(k); cx.strokeStyle = col; cx.lineWidth = w; cx.strokeRect(x + w / 2, y + w / 2, s - w, s - w); }
 const keys = new Set();
+let miniTick = 0;
 function frame(nowP) {
-  if (fly) {
-    const k = Math.min(1, (nowP - fly.t0) / 600), e = 1 - Math.pow(1 - k, 3);
-    cam.x = fly.x0 + (fly.x - fly.x0) * e; cam.y = fly.y0 + (fly.y - fly.y0) * e; cam.z = fly.z0 + (fly.z - fly.z0) * e; clampCam();
-    if (k >= 1) fly = null;
-  }
+  if (fly) { const k = Math.min(1, (nowP - fly.t0) / 600), e = 1 - Math.pow(1 - k, 3); cam.x = fly.x0 + (fly.x - fly.x0) * e; cam.y = fly.y0 + (fly.y - fly.y0) * e; cam.z = fly.z0 + (fly.z - fly.z0) * e; clampCam(); if (k >= 1) fly = null; }
   if (keys.size) {
-    const sp = 10 / cam.z * (keys.has('Shift') ? 2.2 : 1) * 1.6;
+    const sp = 16 / cam.z * (keys.has('Shift') ? 2.2 : 1);
     if (keys.has('a') || keys.has('ArrowLeft')) cam.x -= sp; if (keys.has('d') || keys.has('ArrowRight')) cam.x += sp;
     if (keys.has('w') || keys.has('ArrowUp')) cam.y -= sp; if (keys.has('s') || keys.has('ArrowDown')) cam.y += sp;
     clampCam();
   }
   const sw = vw / cam.z, sh = vh / cam.z, L = cam.x - sw / 2, T = cam.y - sh / 2;
   cx.setTransform(dpr, 0, 0, dpr, 0, 0); cx.imageSmoothingEnabled = false;
-  cx.fillStyle = '#2d5a27'; cx.fillRect(0, 0, vw, vh);
+  cx.fillStyle = '#379b4b'; cx.fillRect(0, 0, vw, vh);
   cx.drawImage(world, L, T, sw, sh, 0, 0, vw, vh);
   cx.setTransform(dpr * cam.z, 0, 0, dpr * cam.z, -L * cam.z * dpr, -T * cam.z * dpr);
   const now = Date.now();
-  for (let j = 0; j < N; j++) { const y0 = lotPx(0, j)[1]; if (y0 + LPX < T - 40 || y0 - 60 > T + sh) continue;
-    for (let i = 0; i < N; i++) { const x0 = lotPx(i, 0)[0]; if (x0 + LPX < L || x0 > L + sw || !buyable(i, j)) continue; drawLot(cx, key(i, j), now); } }
+  for (const [x, y] of PLOTS) { const X = x * TS, Y = y * TS; if (X + LPX < L || X > L + sw || Y + LPX < T - 16 || Y > T + sh) continue; drawLot(cx, key(x, y), now); }
   cx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  if (hover && hover !== sel) outline(hover, 'rgba(255,255,255,.7)', 2);
+  if (hover && hover !== sel) outline(hover, 'rgba(255,255,255,.75)', 2);
   if (sel) { outline(sel, '#2b1d14', 4); outline(sel, Math.floor(nowP / 380) % 2 ? '#ffffff' : '#ffe066', 2); }
   if (++miniTick % 6 === 0) drawMiniView();
   requestAnimationFrame(frame);
 }
-// minimap
 const mm = $('mini'), mx = mm.getContext('2d');
 const mini = document.createElement('canvas'); mini.width = mm.width; mini.height = mm.height;
-let miniTick = 0;
 function drawMini() {
   const m = mini.getContext('2d'); m.imageSmoothingEnabled = true; m.drawImage(world, 0, 0, mini.width, mini.height);
-  const s = mini.width / WPX;
-  for (const [k, l] of Object.entries(land)) { const [i, j] = k.split('_').map(Number), [x0, y0] = lotPx(i, j); m.fillStyle = l.owner === me ? '#f2a93b' : '#e8504f'; m.fillRect(x0 * s, y0 * s, LPX * s, LPX * s); }
+  const s = mini.width / WPXW;
+  for (const [x, y] of PLOTS) { const l = land[key(x, y)]; m.fillStyle = l ? (l.owner === me ? '#f2a93b' : '#e8504f') : 'rgba(255,255,255,.35)'; m.fillRect(x * TS * s, y * TS * s, LPX * s, LPX * s); }
 }
 function drawMiniView() {
   mx.imageSmoothingEnabled = false; mx.drawImage(mini, 0, 0);
-  const s = mm.width / WPX, sw = vw / cam.z, sh = vh / cam.z;
+  const s = mm.width / WPXW, sw = vw / cam.z, sh = vh / cam.z;
   mx.strokeStyle = '#ffffff'; mx.lineWidth = 2; mx.strokeRect((cam.x - sw / 2) * s, (cam.y - sh / 2) * s, sw * s, sh * s);
 }
-function miniJump(e) { const r = mm.getBoundingClientRect(); fly = null; cam.x = (e.clientX - r.left) / r.width * WPX; cam.y = (e.clientY - r.top) / r.height * WPX; clampCam(); }
+function miniJump(e) { const r = mm.getBoundingClientRect(); fly = null; cam.x = (e.clientX - r.left) / r.width * WPXW; cam.y = (e.clientY - r.top) / r.height * WPXH; clampCam(); }
 mm.addEventListener('pointerdown', (e) => { e.stopPropagation(); mm.setPointerCapture(e.pointerId); miniJump(e); });
 mm.addEventListener('pointermove', (e) => { if (e.buttons) miniJump(e); });
-// input
 const ptrs = new Map(); let drag = null, pinch = null;
 cv.addEventListener('pointerdown', (e) => {
   cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); fly = null;
@@ -470,7 +397,7 @@ cv.addEventListener('pointermove', (e) => {
   if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pinch && ptrs.size === 2) { const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y); zoomAt(pinch.z * d / pinch.d / cam.z, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top); return; }
   if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 5) drag.moved = true; if (drag.moved) { cam.x = drag.cx - dx / cam.z; cam.y = drag.cy - dy / cam.z; clampCam(); cv.style.cursor = 'grabbing'; } }
-  if (e.pointerType === 'mouse') { const [wx0, wy0] = toWorld(sx, sy); hover = lotOfPx(wx0, wy0); }
+  if (e.pointerType === 'mouse') { const [a, b] = toWorld(sx, sy); hover = lotOfPx(a, b); }
 });
 function endPtr(e) {
   const r = cv.getBoundingClientRect();
@@ -494,19 +421,18 @@ window.addEventListener('keyup', (e) => keys.delete(e.key.length === 1 ? e.key.t
 window.addEventListener('blur', () => keys.clear());
 $('zin').onclick = () => zoomAt(1.4, vw / 2, vh / 2);
 $('zout').onclick = () => zoomAt(1 / 1.4, vw / 2, vh / 2);
-$('zall').onclick = () => flyTo(WPX / 2, WPX / 2, minZ());
+$('zall').onclick = () => flyTo(WPXW / 2, WPXH / 2, minZ());
 $('zhome').onclick = () => {
-  const mine = Object.entries(land).filter(([, l]) => l.owner === me).map(([k]) => lotPx(...k.split('_').map(Number)));
-  if (!mine.length) { toast('Bạn chưa có đất. Về quảng trường trung tâm.'); flyTo(WPX / 2, WPX / 2, 3); return; }
-  flyTo(mine.reduce((s, p) => s + p[0], 0) / mine.length + LPX / 2, mine.reduce((s, p) => s + p[1], 0) / mine.length + LPX / 2, 4);
+  const mine = Object.entries(land).filter(([, l]) => l.owner === me).map(([k]) => k.split('_').map(Number));
+  if (!mine.length) { toast('Bạn chưa có đất. Về quảng trường trung tâm.'); flyTo(WPXW / 2, WPXH / 2, 3); return; }
+  flyTo(mine.reduce((s, p) => s + p[0], 0) / mine.length * TS + LPX / 2, mine.reduce((s, p) => s + p[1], 0) / mine.length * TS + LPX / 2, 4);
 };
 function redrawLand() { drawMini(); }
 function redrawCrops() {}
 function draw() { drawMini(); }
-makeSprites();
-sheetsReady.then(() => { paintGround(); paintScenery(); drawMini(); renderShop(); renderPlot(); });
 new ResizeObserver(resize).observe(cv);
-resize(); cam.z = 3; clampCam(); drawMini(); requestAnimationFrame(frame);
+resize(); cam.z = 3; clampCam(); requestAnimationFrame(frame);
+sheetsReady.then(() => { paintGround(); paintScenery(); drawMini(); renderShop(); renderPlot(); });
 
 // ---------- Rendering ----------
 function renderWallet() {
@@ -529,9 +455,9 @@ function costText(c) { return `${c.wood} gỗ, ${c.stone} đá`; }
 function hasCost(f, c) { const i = f.inv || {}; return (i.wood || 0) >= c.wood && (i.stone || 0) >= c.stone; }
 function renderPlot() {
   const el = $('plot'), f = myFarm(), now = Date.now();
-  if (!sel) { el.innerHTML = `<h2>Ô đất</h2><p class="note">Bấm một lô đất có biển bán trên bản đồ để xem, mua hoặc làm việc trên đó. Đã bán <b class="num">${soldCount()}</b>/${BUYABLE} ô đất.</p>`; return; }
+  if (!sel) { el.innerHTML = `<h2>Lô đất</h2><p class="note">Bấm một lô có 4 cọc gỗ ở góc để xem, mua hoặc làm việc trên đó. Đã bán <b class="num">${soldCount()}</b>/${BUYABLE} lô.</p>`; return; }
   const [x, y] = sel.split('_').map(Number), l = land[sel];
-  let h = `<h2>Ô đất ${x + 1}·${y + 1}</h2>`;
+  let h = `<h2>Lô đất #${lotNo(sel)}</h2>`;
   if (!l && !buyable(x, y)) {
     const T_NAMES = { 1: 'Bãi cỏ dại', 2: 'Ruộng lúa chung', 4: 'Quảng trường' };
     el.innerHTML = h + `<div class="kv"><span>Địa hình</span><b>${T_NAMES[ter(x, y)]}</b></div><p class="note">Khu vực chung, không bán. Chọn một lô có biển bán nhà.</p>`; return;
@@ -539,8 +465,8 @@ function renderPlot() {
   if (!l) {
     const pr = landPrice();
     h += `<div class="kv"><span>Giá hiện tại</span><b class="num">${fmt(pr, 0)} PURR</b></div>
-      <p class="note">Mỗi ô bán ra làm giá ô tiếp theo tăng ${LAND_STEP} PURR.</p>
-      <button class="go" data-act="buyLand" ${!f || busy || f.purr < pr ? 'disabled' : ''}>Mua ô đất này</button>`;
+      <p class="note">Mỗi lô bán ra làm giá lô tiếp theo tăng ${LAND_STEP} PURR.</p>
+      <button class="go" data-act="buyLand" ${!f || busy || f.purr < pr ? 'disabled' : ''}>Mua lô đất này</button>`;
     if (f && f.purr < pr) h += `<p class="note">Bạn cần thêm ${fmt(pr - f.purr, 0)} PURR. Mua PURR ở chợ.</p>`;
     el.innerHTML = h; return;
   }
@@ -550,13 +476,13 @@ function renderPlot() {
     h += `<div class="kv"><span>Hiện có</span><b>Đất trống</b></div>`;
     if (mine) {
       const c = HOUSE[1].cost, inv = f.inv || {};
-      h += `<button data-act="build" ${busy || !hasCost(f, c) ? 'disabled' : ''}>Xây ${HOUSE[1].name} (${costText(c)})</button>
-        <p class="note">Nhà đào ${HOUSE[1].rate} PURR/giờ. Hoặc trồng rau:</p><div class="row">` +
+      h += `<button data-act="build" ${busy || !hasCost(f, c) ? 'disabled' : ''}>Lập ${HOUSE[1].name} (${costText(c)})</button>
+        <p class="note">Đồng lúa tự mọc lại và đào ${HOUSE[1].rate} PURR/giờ. Hoặc trồng một vụ:</p><div class="row">` +
         Object.entries(CROPS).map(([k, cr]) => `<button data-act="plant" data-crop="${k}" ${busy || !(inv[k] > 0) ? 'disabled' : ''}>${icon(cr.icon)}${cr.name} (${inv[k] || 0})</button>`).join('') + `</div>`;
     }
   } else if (p.kind === 'house') {
     const H = HOUSE[p.level];
-    h += `<div class="kv"><span>Công trình</span><b>${H.name} · cấp ${p.level}</b></div><div class="kv"><span>Đào được</span><b class="num">${H.rate} PURR/giờ</b></div>`;
+    h += `<div class="kv"><span>Đồng lúa</span><b>${H.name} · cấp ${p.level}</b></div><div class="kv"><span>Đào được</span><b class="num">${H.rate} PURR/giờ</b></div>`;
     if (mine && p.level < 3) { const N = HOUSE[p.level + 1]; h += `<button data-act="upgrade" ${busy || !hasCost(f, N.cost) ? 'disabled' : ''}>Nâng lên ${N.name} (${costText(N.cost)}) → ${N.rate}/giờ</button>`; }
     if (mine && p.level === 3) h += `<p class="note">Đã đạt cấp tối đa.</p>`;
   } else if (p.kind === 'crop') {
@@ -676,7 +602,7 @@ const actions = {
     const f = accrued(myFarm()), c = HOUSE[1].cost;
     if (!hasCost(f, c)) fail('Thiếu gỗ hoặc đá.');
     f.inv.wood -= c.wood; f.inv.stone -= c.stone; f.plots[sel] = { kind: 'house', level: 1 };
-    await saveFarm(f); toast('Đã xây nhà. Nhà bắt đầu đào PURR.');
+    await saveFarm(f); toast('Đã lập đồng lúa. Đồng lúa bắt đầu đào PURR.');
   }),
   upgrade: () => act(async () => {
     const f = accrued(myFarm()), p = f.plots[sel], c = HOUSE[p.level + 1].cost;
