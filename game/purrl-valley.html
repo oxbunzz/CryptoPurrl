@@ -13,7 +13,7 @@ html, body { height: 100%; margin: 0; background: #3f8a3a; overflow: hidden; }
 'use strict';
 // ================= rules (play money) =================
 const START = { purr: 500, usdt: 100 };
-const LAND_BASE = 100, LAND_STEP = 4;
+const LAND_BASE = 100, LAND_STEP = 2, BULK_OFF = 0.1; // whole-district purchases get 10% off
 const CLAIM_CD = 10 * 60 * 1000, CLAIM_FEE = 0.05;
 const POOL0 = { purr: 100000, usdt: 10000 }, SWAP_FEE = 0.003;
 // crops: row on the Spring Crops sheet; stages are columns 0-5, the harvested item is column 7
@@ -35,14 +35,14 @@ const HOUSE = [null,
 let db = null, user = null, me = null, canWrite = null, signedIn = null;
 let land = {}, farms = {}, pool = null, names = {};
 let sel = null, busy = false, hover = null;
-const ui = { win: null, bplot: null, seed: 'strawberry', toast: null, toastAt: 0, title: true };
+const ui = { win: null, bplot: null, dist: -1, seed: 'strawberry', toast: null, toastAt: 0, title: true };
 const fmt = (n, d = 1) => Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 const mins = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 const key = (x, y) => x + '_' + y;
 const clone = (o) => JSON.parse(JSON.stringify(o));
 function toast(m) { ui.toast = m; ui.toastAt = performance.now(); }
 const myFarm = () => (me && farms[me]) || null;
-const soldCount = () => Object.keys(land).length;
+const soldCount = () => Object.keys(land).filter((k) => k in PLOT_INDEX).length;
 const landPrice = () => LAND_BASE + LAND_STEP * soldCount();
 const price = () => { const p = pool || POOL0; return p.usdt / p.purr; };
 const building = (p, now = Date.now()) => !!p && p.kind === 'house' && !!p.doneAt && now < p.doneAt;
@@ -84,48 +84,140 @@ function nine(g, name, x, y, w, h, b, s) {
   for (const [sy, shh, dy, dh] of rows) for (const [sx, sww, dx, dw] of cols) if (dw > 0 && dh > 0) g.drawImage(ATLAS, r[0] + sx, r[1] + sy, sww, shh, dx, dy, dw, dh);
 }
 
-// ================= world =================
-const TS = 16, M = 6, LOT = 10, PITCH = 24, BX = 5, BY = 3;
-const MW = M * 2 + BX * PITCH + 3, MH = M * 2 + BY * PITCH + 3, WPXW = MW * TS, WPXH = MH * TS;
+// ================= world: one big continent shaped like Europe =================
+const TS = 16, LOT = 10, CELL = 12, CW = 104, CH = 88, MW = CW * CELL, MH = CH * CELL, WPXW = MW * TS, WPXH = MH * TS;
 function hash(a, b, c = 0) { let h = (a * 374761393 + b * 668265263 + c * 2147483647) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+function vnoise(x, y, s) {
+  const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+  const a = hash(xi, yi, s), b = hash(xi + 1, yi, s), c = hash(xi, yi + 1, s), d = hash(xi + 1, yi + 1, s);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+const fbm = (x, y, s) => vnoise(x / 26, y / 26, s) * .55 + vnoise(x / 11, y / 11, s + 1) * .3 + vnoise(x / 4, y / 4, s + 2) * .15;
+// rough coastlines as [lon, lat] pairs
+const LON0 = -25, LON1 = 45, LAT0 = 33.6, LAT1 = 71.6;
+const COAST = [
+  [-5.6,36,-4.4,36.7,-1,37.6,-.3,39.5,2.2,41.4,3.1,42.7,5.4,43.3,7.3,43.7,8.9,44.4,9.8,44.1,10.3,43.5,12.3,41.8,14.3,40.8,15.6,40,16,38,17.1,39,17.2,40.4,18.5,40.1,16.9,41.1,16,41.9,14.2,42.5,13.5,43.6,12.6,44.1,12.3,45.4,13.8,45.6,13.6,44.9,14.4,45.3,16.4,43.5,18.1,42.6,19.5,41.5,19.4,40.3,20.7,39,21.3,37.8,21.7,36.8,22.5,36.4,23.2,36.5,22.8,37.6,23.7,38,24,38.4,22.9,39.4,22.6,40.4,23.9,40,24.4,40.9,26,40.8,28.9,41,28,41.9,27.5,42.5,27.9,43.2,28.6,44.2,29.6,45.2,30.7,46.5,31.9,46.6,32.5,46.1,33.6,44.5,35.5,45.1,36.5,45.3,35,46.2,38,47.1,39.3,47.2,38.3,46.4,37.5,44.7,40,43.4,41.6,41.6,45,41.6,45,68,44,68.5,40,64.5,37,66.3,41,67.8,33,69.4,28,71,25.8,71.1,20,70,18.9,69.6,14,68.2,12.5,66,10.4,63.4,5,62,5.3,60.4,5.6,58.9,7,58,10.5,59,11.9,57.7,13,55.6,14,55.4,16.3,56.6,18.9,59.3,17.2,60.7,17.3,62.5,20.3,63.8,22.1,65.6,25.4,65,21.5,63.2,21.4,60.9,22.3,60.4,25,60.2,30.3,59.9,28,59.5,24.7,59.4,23.5,58.9,24,58.2,24.1,57,21.6,57.4,21,56.5,21.1,55.7,19.9,54.9,18.6,54.4,16.5,54.6,14.3,53.9,12.1,54.2,10.1,54.3,10.5,55,10.8,56.5,10.6,57.7,8.6,57.1,8.1,55.5,8.6,54.9,8.8,53.9,7,53.5,4.8,53,4,51.9,2.5,51.1,1.8,50.9,1.5,50.1,.1,49.5,-1.3,49.6,-1.5,48.6,-4.7,48.4,-4.3,47.8,-2.2,47.2,-1.2,46,-1.3,44.4,-1.8,43.4,-3.8,43.5,-8,43.7,-9.3,43,-8.8,42,-8.7,41.1,-9.5,38.8,-8.8,37,-7.4,37.2,-6.3,36.5],
+  [-5.7,50,-3.5,50.3,-1,50.7,1.4,51.2,1.7,52.6,.3,53.4,-.2,54.1,-1.6,55.6,-2.1,57.1,-1.8,57.6,-3.3,58.6,-5,58.6,-5.8,57.8,-5.6,56.5,-5.1,55.4,-4.6,54.8,-3.2,54.9,-3,53.9,-3,53.3,-4.6,53.3,-4.7,52.8,-4.1,52.3,-5.3,51.8,-4,51.6,-3,51.5,-4.2,51.2],
+  [-6,52.2,-6,53.5,-5.5,54.6,-6.2,55.2,-7.3,55.3,-8.5,54.5,-10,54.2,-9.8,53.3,-9.5,52.3,-10.2,51.7,-8.5,51.6,-6.4,52.2],
+  [-22,64,-24,65.5,-22.5,66.4,-18,66.2,-15,66.4,-13.6,65.2,-14.5,64.4,-18,63.4,-21,63.8],
+  [8.6,43,9.5,43,9.4,41.4,8.7,41.6], [8.4,41,9.7,41,9.6,39.1,8.5,39,8.4,40.5],
+  [12.4,38.1,15.6,38.3,15.1,36.7,12.6,37.6], [23.5,35.6,26.3,35.3,26,35,23.6,35.2],
+  [2.4,39.6,3.5,39.9,3.2,39.3], [11,55.4,12.6,56,12.4,55,11.4,55.2], [32.3,34.8,34.6,35.6,33.9,34.9,32.9,34.6],
+];
+const PX = (lon) => (lon - LON0) / (LON1 - LON0) * MW, PY = (lat) => (LAT1 - lat) / (LAT1 - LAT0) * MH;
+const DISTRICTS = [['Lusitania', -8, 39.6], ['Iberia', -3.6, 40.2], ['Aquitania', 0, 44.6], ['Gallia', 3, 47.4], ['Armorica', -2.6, 48.2], ['Britannia', -1.4, 52.4], ['Caledonia', -4.2, 57], ['Hibernia', -8, 53.2], ['Islandia', -19, 64.9],
+  ['Provence', 6, 44.4], ['Alpina', 9, 46.6], ['Italia', 12.8, 42.6], ['Sicilia', 14.2, 37.6], ['Sardinia', 9, 40.6], ['Batavia', 5.2, 51.6], ['Germania', 9.6, 51], ['Saxonia', 13, 52.2], ['Jutland', 9.4, 56], ['Norvegia', 8.6, 61], ['Svealand', 15, 59.6],
+  ['Lapland', 21, 67], ['Suomi', 26, 63], ['Karelia', 33, 63.4], ['Borealia', 40.6, 66], ['Baltica', 24.4, 56.6], ['Polonia', 19.4, 52.2], ['Bohemia', 15, 49.6], ['Pannonia', 19.4, 47.2], ['Dacia', 25, 46], ['Balkania', 20.6, 43.4],
+  ['Hellas', 22, 39], ['Creta', 25, 35.3], ['Thracia', 26.6, 42.2], ['Ruthenia', 30, 54.6], ['Sarmatia', 32.4, 49.6], ['Taurica', 34.4, 45.4], ['Muscovy', 38.6, 56.6], ['Volga', 42, 51.4], ['Caucasia', 41.6, 44.2], ['Cyprus', 33.2, 35]];
 const G = new Uint8Array(MW * MH);                 // 0 grass, 1 dirt, 2 stone square, 3 water
 const at = (x, y) => y * MW + x, inMap = (x, y) => x >= 0 && y >= 0 && x < MW && y < MH;
-const g = (x, y) => (inMap(x, y) ? G[at(x, y)] : 0);
-const BLOCK = { plaza: [2, 1], lake: [0, 2], grove: [4, 0] };
-const isB = (bi, bj, k) => BLOCK[k][0] === bi && BLOCK[k][1] === bj;
-const PLOTS = [], PID = new Int16Array(MW * MH).fill(-1), TREES = [], PROPS = [];
-let PLAZA = null, LAKE = null;
-(function genMap() {
-  for (let i = 0; i <= BX; i++) for (let y = M; y < MH - M; y++) for (let d = 0; d < 3; d++) G[at(M + i * PITCH + d, y)] = 1;
-  for (let j = 0; j <= BY; j++) for (let x = M; x < MW - M; x++) for (let d = 0; d < 3; d++) G[at(x, M + j * PITCH + d)] = 1;
-  for (let bj = 0; bj < BY; bj++) for (let bi = 0; bi < BX; bi++) {
-    const x0 = M + 3 + bi * PITCH, y0 = M + 3 + bj * PITCH;
-    if (isB(bi, bj, 'plaza')) { for (let y = 0; y < 21; y++) for (let x = 0; x < 21; x++) G[at(x0 + x, y0 + y)] = 2; PLAZA = [x0, y0]; continue; }
-    if (isB(bi, bj, 'lake')) {
-      LAKE = [x0, y0];
-      for (let y = 0; y < 21; y++) for (let x = 0; x < 21; x++) { const dx = (x - 10) / 8.2, dy = (y - 10.5) / 6.6, w = 1 + .12 * Math.sin(Math.atan2(dy, dx) * 3); if (dx * dx + dy * dy < w * w) G[at(x0 + x, y0 + y)] = 3; }
-      for (const [x, y] of [[1, 1], [18, 2], [2, 18], [17, 17]]) TREES.push(['maple', (x0 + x) * TS, (y0 + y) * TS, hash(x, y) < .5 ? 0 : 1]);
-      continue;
-    }
-    if (isB(bi, bj, 'grove')) { for (let y = 1; y < 21; y += 3) for (let x = 1; x < 21; x += 3) if (hash(x0 + x, y0 + y, 4) < .75) TREES.push([hash(x, y, 5) < .4 ? 'pine' : 'maple', (x0 + x + (hash(x, y, 6) - .5) * 1.5) * TS, (y0 + y + 1) * TS, hash(x, y, 7) < .5 ? 0 : 1]); continue; }
-    // four 10×10 lots, separated by a one-tile footpath
-    for (let y = 0; y < 21; y++) for (let x = 0; x < 21; x++) G[at(x0 + x, y0 + y)] = 1;
-    for (const [ox, oy] of [[0, 0], [11, 0], [0, 11], [11, 11]]) {
-      const lx = x0 + ox, ly = y0 + oy, id = PLOTS.length; PLOTS.push([lx, ly]);
-      for (let y = 0; y < LOT; y++) for (let x = 0; x < LOT; x++) { G[at(lx + x, ly + y)] = 0; PID[at(lx + x, ly + y)] = id; }
+const g = (x, y) => (inMap(x, y) ? G[at(x, y)] : 3);
+const CT = new Uint8Array(CW * CH), CD = new Int8Array(CW * CH).fill(-1); // cell type: 0 sea, 1 plot, 2 forest, 3 town square, 4 wild coast; cell district
+const C_PLOT = 1, C_FOREST = 2, C_TOWN = 3, C_WILD = 4;
+const PLOTS = [], PLOT_DIST = [], CELLPLOT = new Int32Array(CW * CH).fill(-1), TREES = [], PROPS = [], DIST = [];
+(function genWorld() {
+  const L0 = new Uint8Array(MW * MH);
+  for (const poly of COAST) {
+    const pts = []; for (let i = 0; i < poly.length; i += 2) pts.push([PX(poly[i]), PY(poly[i + 1])]);
+    for (let y = 0; y < MH; y++) {
+      const yc = y + .5, xs = [];
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [x1, y1] = pts[i], [x2, y2] = pts[j]; if ((y1 > yc) !== (y2 > yc)) xs.push(x1 + (yc - y1) / (y2 - y1) * (x2 - x1)); }
+      xs.sort((a, b) => a - b);
+      for (let k = 0; k + 1 < xs.length; k += 2) for (let x = Math.max(0, Math.ceil(xs[k] - .5)); x < Math.min(MW, xs[k + 1] - .5); x++) L0[at(x, y)] = 1;
     }
   }
-  // forest all round the town
-  for (let y = 0; y < MH; y += 2) for (let x = 0; x < MW; x += 2) {
-    const edge = x < M - 1 || y < M - 1 || x > MW - M || y > MH - M;
-    if (edge && hash(x, y, 9) < .85) TREES.push([hash(x, y, 10) < .45 ? 'pine' : 'maple', (x + (hash(x, y, 11) - .5)) * TS - 4, (y + 1 + hash(x, y, 12)) * TS, hash(x, y, 13) < .5 ? 0 : 1]);
+  // wobble the coast so it reads as a natural shoreline
+  const DX = new Float32Array((MW >> 1) + 1), DY = new Float32Array((MW >> 1) + 1);
+  for (let y = 0; y < MH; y++) {
+    if (!(y & 1)) for (let x = 0; x < MW; x += 2) { DX[x >> 1] = (fbm(x, y, 11) - .5) * 24; DY[x >> 1] = (fbm(x, y, 21) - .5) * 24; }
+    for (let x = 0; x < MW; x++) {
+    const sx = Math.round(x + DX[x >> 1]), sy = Math.round(y + DY[x >> 1]);
+    const land = x > 3 && y > 3 && x < MW - 4 && y < MH - 4 && inMap(sx, sy) && L0[at(sx, sy)];
+    G[at(x, y)] = land ? 0 : 3;
+  } }
+  // districts: nearest seed
+  const seeds = DISTRICTS.map(([n, lon, lat]) => [n, PX(lon), PY(lat)]);
+  const nearest = (x, y) => { let b = -1, bd = 1e18; seeds.forEach(([, sx, sy], i) => { const d = (sx - x) ** 2 + (sy - y) ** 2; if (d < bd) { bd = d; b = i; } }); return b; };
+  const landIn = (x0, y0, x1, y1) => { let n = 0; for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (g(x, y) !== 3) n++; return n; };
+  for (let cy = 0; cy < CH; cy++) for (let cx = 0; cx < CW; cx++) {
+    const x0 = cx * CELL, y0 = cy * CELL, c = cy * CW + cx, n = landIn(x0, y0, x0 + CELL, y0 + CELL);
+    if (!n) continue;
+    CD[c] = nearest(x0 + CELL / 2, y0 + CELL / 2);
+    const full = landIn(x0 - 1, y0 - 1, x0 + CELL + 1, y0 + CELL + 1) === (CELL + 2) ** 2;
+    CT[c] = !full ? C_WILD : fbm(cx * 6, cy * 6, 31) > .64 ? C_FOREST : C_PLOT;
   }
+  // a town square for every district, on the plot cell nearest its seed
+  const seedOwner = [];
+  seeds.forEach(([name, sx, sy], i) => {
+    let best = -1, bd = 1e18;
+    for (let c = 0; c < CW * CH; c++) if (CD[c] === i && (CT[c] === C_PLOT || CT[c] === C_FOREST)) { const d = ((c % CW + .5) * CELL - sx) ** 2 + ((Math.floor(c / CW) + .5) * CELL - sy) ** 2 + (CT[c] === C_FOREST ? 4e4 : 0); if (d < bd) { bd = d; best = c; } }
+    if (best < 0) return;
+    CT[best] = C_TOWN; seedOwner[i] = DIST.length;
+    DIST.push({ name, town: [(best % CW) * CELL + 1, Math.floor(best / CW) * CELL + 1], plots: [], cells: [] });
+  });
+  for (let c = 0; c < CW * CH; c++) if (CD[c] >= 0) { const d = seedOwner[CD[c]]; CD[c] = d === undefined ? -1 : d; }
+  // paint cells
+  for (let cy = 0; cy < CH; cy++) for (let cx = 0; cx < CW; cx++) {
+    const c = cy * CW + cx, x0 = cx * CELL, y0 = cy * CELL, t = CT[c];
+    if (t === C_PLOT || t === C_TOWN) {
+      for (let y = 0; y < CELL; y++) for (let x = 0; x < CELL; x++) G[at(x0 + x, y0 + y)] = 1;
+      const inner = t === C_PLOT ? 0 : 2;
+      for (let y = 1; y <= LOT; y++) for (let x = 1; x <= LOT; x++) G[at(x0 + x, y0 + y)] = inner;
+      if (t === C_PLOT && CD[c] >= 0) { const id = PLOTS.length; PLOTS.push([x0 + 1, y0 + 1]); PLOT_DIST.push(CD[c]); CELLPLOT[c] = id; DIST[CD[c]].plots.push(id); }
+      if (t === C_TOWN) for (const [a, b] of [[1, 1], [8, 1], [1, 7], [8, 7]]) PROPS.push(['lamp', (x0 + 1 + a) * TS, (y0 + 1 + b) * TS]);
+    } else if (t === C_FOREST) {
+      for (let y = 1; y < CELL; y += 2) for (let x = 0; x < CELL; x += 2) if (hash(x0 + x, y0 + y, 4) < .78) TREES.push([hash(x0 + x, y0 + y, 5) < .45 ? 'pine' : 'maple', (x0 + x + (hash(x0 + x, y0 + y, 6) - .5) * 1.4) * TS, (y0 + y + 1) * TS, hash(x0 + x, y0 + y, 7) < .5 ? 0 : 1]);
+    } else if (t === C_WILD) {
+      for (let y = 0; y < CELL; y += 2) for (let x = 0; x < CELL; x += 2) {
+        const X = x0 + x, Y = y0 + y; let ok = true;
+        for (let b = -1; b <= 2 && ok; b++) for (let a = -1; a <= 2; a++) if (g(X + a, Y + b) === 3) { ok = false; break; }
+        if (ok && hash(X, Y, 8) < .4) TREES.push([hash(X, Y, 9) < .5 ? 'pine' : 'maple', (X + (hash(X, Y, 10) - .5)) * TS - 4, (Y + 1 + hash(X, Y, 12)) * TS, hash(X, Y, 13) < .5 ? 0 : 1]);
+      }
+    }
+  }
+  // districts with almost no farmland merge into their nearest neighbour
+  const keep = DIST.map((D) => D.plots.length >= 6);
+  if (keep.some((k) => !k)) {
+    const remap = []; let n = 0; DIST.forEach((D, i) => { if (keep[i]) remap[i] = n++; });
+    const tc = DIST.map((D) => [D.town[0] + LOT / 2, D.town[1] + LOT / 2]);
+    const near = (x, y) => { let b = -1, bd = 1e18; tc.forEach(([sx, sy], i) => { if (!keep[i]) return; const d = (sx - x) ** 2 + (sy - y) ** 2; if (d < bd) { bd = d; b = i; } }); return b; };
+    for (let c = 0; c < CW * CH; c++) {
+      const d = CD[c]; if (d < 0) continue;
+      const nd = keep[d] ? d : near((c % CW + .5) * CELL, (Math.floor(c / CW) + .5) * CELL);
+      if (!keep[d] && CT[c] === C_TOWN) { CT[c] = C_PLOT; const x0 = (c % CW) * CELL + 1, y0 = Math.floor(c / CW) * CELL + 1; for (let y = 0; y < LOT; y++) for (let x = 0; x < LOT; x++) G[at(x0 + x, y0 + y)] = 0; for (let k = PROPS.length - 1; k >= 0; k--) if (Math.floor(PROPS[k][1] / TS / CELL) === c % CW && Math.floor(PROPS[k][2] / TS / CELL) === Math.floor(c / CW)) PROPS.splice(k, 1); const id = PLOTS.length; PLOTS.push([x0, y0]); PLOT_DIST.push(nd); CELLPLOT[c] = id; }
+      CD[c] = remap[nd];
+    }
+    for (let i = 0; i < PLOT_DIST.length; i++) PLOT_DIST[i] = CD[Math.floor(PLOTS[i][1] / CELL) * CW + Math.floor(PLOTS[i][0] / CELL)];
+    const kept = DIST.filter((D, i) => keep[i]); DIST.length = 0; DIST.push(...kept); DIST.forEach((D) => (D.plots = []));
+    PLOT_DIST.forEach((d, i) => DIST[d].plots.push(i));
+  }
+  // roads never touch the sea: soften dirt next to water into grass
+  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (G[at(x, y)] === 1) { for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) if (g(x + a, y + b) === 3) G[at(x, y)] = 0; }
 })();
 const PLOT_INDEX = Object.fromEntries(PLOTS.map(([x, y], n) => [key(x, y), n]));
+const pkey = (id) => key(...PLOTS[id]);
 const lotNo = (k) => PLOT_INDEX[k] + 1;
-function lotOfPx(px, py) { const x = Math.floor(px / TS), y = Math.floor(py / TS); if (!inMap(x, y)) return null; const id = PID[at(x, y)]; return id < 0 ? null : key(...PLOTS[id]); }
-const world = document.createElement('canvas'); world.width = WPXW; world.height = WPXH;
-const wg = world.getContext('2d');
+const distOf = (k) => DIST[PLOT_DIST[PLOT_INDEX[k]]];
+const cellOfPx = (px, py) => { const cx = Math.floor(px / TS / CELL), cy = Math.floor(py / TS / CELL); return cx >= 0 && cy >= 0 && cx < CW && cy < CH ? cy * CW + cx : -1; };
+function lotOfPx(px, py) {
+  const c = cellOfPx(px, py); if (c < 0 || CELLPLOT[c] < 0) return null;
+  const [lx, ly] = PLOTS[CELLPLOT[c]], x = px / TS, y = py / TS;
+  return x >= lx && y >= ly && x < lx + LOT && y < ly + LOT ? key(lx, ly) : null;
+}
+const distAtPx = (px, py) => { const c = cellOfPx(px, py); return c < 0 ? -1 : CD[c]; };
+const townCenter = (d) => [(DIST[d].town[0] + LOT / 2) * TS, (DIST[d].town[1] + LOT / 2) * TS];
+// district borders, drawn when zoomed out
+const BORDERS = new Path2D(), DIST_EDGE = DIST.map(() => new Path2D());
+for (let cy = 0; cy < CH; cy++) for (let cx = 0; cx < CW; cx++) {
+  const c = cy * CW + cx, d = CD[c]; if (d < 0) continue;
+  const P = CELL * TS, X = cx * P, Y = cy * P;
+  for (const [nx, ny, x1, y1, x2, y2] of [[cx + 1, cy, X + P, Y, X + P, Y + P], [cx, cy + 1, X, Y + P, X + P, Y + P], [cx - 1, cy, X, Y, X, Y + P], [cx, cy - 1, X, Y, X + P, Y]]) {
+    const e = nx >= 0 && ny >= 0 && nx < CW && ny < CH ? CD[ny * CW + nx] : -1;
+    if (e === d) continue;
+    DIST_EDGE[d].moveTo(x1, y1); DIST_EDGE[d].lineTo(x2, y2);
+    if (e > d) { BORDERS.moveTo(x1, y1); BORDERS.lineTo(x2, y2); }
+  }
+}
 // edge pieces shared by the grass, shoreline, soil and stone sets (same 12×4 template)
 function edgePiece(N, S, W, E, NW, NE, SW, SE) {
   const n = N + S + W + E;
@@ -138,27 +230,77 @@ function edgePiece(N, S, W, E, NW, NE, SW, SE) {
   return [9, 2];
 }
 function block(w, h, lx, ly) { return edgePiece(ly === 0, ly === h - 1, lx === 0, lx === w - 1, 0, 0, 0, 0); }
-function paintWorld() {
-  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
-    const X = x * TS, Y = y * TS, k = g(x, y);
-    if (k === 3) { whole(wg, 'water', X, Y); continue; }
-    const nearWater = [[0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [1, -1], [-1, 1], [1, 1]].some(([a, b]) => g(x + a, y + b) === 3);
-    if (nearWater && k === 0) whole(wg, 'water', X, Y); else whole(wg, 'dirt', X, Y);
-    if (k === 0) {
-      const o = (a, b) => g(x + a, y + b) !== 0 && inMap(x + a, y + b);
-      const [c, r] = edgePiece(o(0, -1), o(0, 1), o(-1, 0), o(1, 0), o(-1, -1), o(1, -1), o(-1, 1), o(1, 1));
-      tile16(wg, nearWater ? 'shore' : 'grass', c, r, X, Y);
-    } else if (k === 2) { const [c, r] = block(21, 21, x - PLAZA[0], y - PLAZA[1]); tile16(wg, 'stonepath', c, r, X, Y); }
+// ---- chunked rendering: 32×32-tile chunks painted on demand, plus a small overview of the whole continent ----
+const CHK = 32, CPX = CHK * TS, NCX = Math.ceil(MW / CHK), NCY = Math.ceil(MH / CHK), OVS = 2 / 16;
+const BUCKET = Array.from({ length: NCX * NCY }, () => []);
+function bucketItem(item, x, y, w, h) { for (let j = Math.max(0, Math.floor(y / CPX)); j <= Math.min(NCY - 1, Math.floor((y + h - 1) / CPX)); j++) for (let i = Math.max(0, Math.floor(x / CPX)); i <= Math.min(NCX - 1, Math.floor((x + w - 1) / CPX)); i++) BUCKET[j * NCX + i].push(item); }
+function paintTile(c, x, y) {
+  const X = x * TS, Y = y * TS, k = g(x, y);
+  if (k === 3) { whole(c, 'water', X, Y); return; }
+  const nearWater = [[0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [1, -1], [-1, 1], [1, 1]].some(([a, b]) => g(x + a, y + b) === 3);
+  if (nearWater && k === 0) whole(c, 'water', X, Y); else whole(c, 'dirt', X, Y);
+  if (k === 0) {
+    const o = (a, b) => g(x + a, y + b) !== 0;
+    const [tc, tr] = edgePiece(o(0, -1), o(0, 1), o(-1, 0), o(1, 0), o(-1, -1), o(1, -1), o(-1, 1), o(1, 1));
+    tile16(c, nearWater ? 'shore' : 'grass', tc, tr, X, Y);
+    const cell = cellOfPx(X, Y);
+    if (CELLPLOT[cell] < 0 && CT[cell] !== C_FOREST && hash(x, y, 30) < .03) spr(c, 'gstones', Math.floor(hash(x, y, 31) * 4) * 16, 0, 16, 16, X, Y);
+  } else if (k === 2) { const cx = Math.floor(x / CELL) * CELL + 1, cy = Math.floor(y / CELL) * CELL + 1; const [tc, tr] = block(LOT, LOT, x - cx, y - cy); tile16(c, 'stonepath', tc, tr, X, Y); }
+}
+const scratch = document.createElement('canvas'); scratch.width = scratch.height = CPX;
+function paintChunk(c, i, j) {
+  c.setTransform(1, 0, 0, 1, -i * CPX, -j * CPX); c.imageSmoothingEnabled = false;
+  for (let y = j * CHK; y < Math.min(MH, (j + 1) * CHK); y++) for (let x = i * CHK; x < Math.min(MW, (i + 1) * CHK); x++) paintTile(c, x, y);
+  BUCKET[j * NCX + i].slice().sort((a, b) => a.z - b.z).forEach((it) => it.draw(c));
+  c.setTransform(1, 0, 0, 1, 0, 0);
+}
+const overview = document.createElement('canvas'); overview.width = Math.ceil(WPXW * OVS); overview.height = Math.ceil(WPXH * OVS);
+const ovg = overview.getContext('2d'); let ovNext = 0;
+// quick first pass from tile colours, refined chunk by chunk with the real art
+(function quickOverview() {
+  const W = overview.width, H = overview.height, im = ovg.createImageData(W, H), d = im.data, k = TS * OVS;
+  const COL = [[0x7e, 0xc4, 0x33], [0xed, 0x9c, 0x51], [0x80, 0x6f, 0x5c], [0x00, 0x92, 0xdd]], TREE = [0x2f, 0x7a, 0x3c];
+  const forest = new Uint8Array(CW * CH); for (let c = 0; c < CW * CH; c++) forest[c] = CT[c] === C_FOREST ? 1 : 0;
+  for (let y = 0; y < H; y++) { const ty = Math.min(MH - 1, Math.floor(y / k)); for (let x = 0; x < W; x++) {
+    const tx = Math.min(MW - 1, Math.floor(x / k)), t = G[at(tx, ty)], c = t === 0 && forest[Math.floor(ty / CELL) * CW + Math.floor(tx / CELL)] ? TREE : COL[t], i = (y * W + x) * 4;
+    d[i] = c[0]; d[i + 1] = c[1]; d[i + 2] = c[2]; d[i + 3] = 255;
+  } }
+  ovg.putImageData(im, 0, 0);
+})();
+function growOverview(budget) {
+  const sg = scratch.getContext('2d');
+  while (budget-- > 0 && ovNext < NCX * NCY) {
+    const i = ovNext % NCX, j = Math.floor(ovNext / NCX); ovNext++;
+    let land = false; for (let cy = Math.floor(j * CHK / CELL); cy <= Math.min(CH - 1, Math.floor(((j + 1) * CHK - 1) / CELL)) && !land; cy++) for (let cx = Math.floor(i * CHK / CELL); cx <= Math.min(CW - 1, Math.floor(((i + 1) * CHK - 1) / CELL)); cx++) if (CT[cy * CW + cx]) { land = true; break; }
+    if (!land) continue;
+    sg.clearRect(0, 0, CPX, CPX); paintChunk(sg, i, j);
+    ovg.imageSmoothingEnabled = true; ovg.imageSmoothingQuality = 'high';
+    ovg.drawImage(scratch, 0, 0, CPX, CPX, i * CPX * OVS, j * CPX * OVS, CPX * OVS, CPX * OVS);
   }
-  // little stones and flowers on the grass
-  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (g(x, y) === 0 && PID[at(x, y)] < 0 && hash(x, y, 30) < .05) { const v = Math.floor(hash(x, y, 31) * 4); spr(wg, 'gstones', v * 16, 0, 16, 16, x * TS, y * TS); }
-  // square: lamps, well, notice board
-  const [px0, py0] = PLAZA;
-  for (const [a, b] of [[2, 2], [17, 2], [2, 16], [17, 16]]) PROPS.push(['lamp', (px0 + a) * TS, (py0 + b) * TS]);
-  PROPS.push(['well', (px0 + 3) * TS, (py0 + 9) * TS], ['board', (px0 + 14) * TS, (py0 + 8) * TS]);
-  const items = [...TREES.map(([n, x, y, v]) => [y, () => (n === 'pine' ? whole(wg, 'pine', x, y - 48) : spr(wg, 'maple', v * 32, 0, 32, 48, x, y - 48))]),
-    ...PROPS.map(([n, x, y]) => [y + A[n][3], () => whole(wg, n, x, y)])];
-  items.sort((a, b) => a[0] - b[0]).forEach(([, f]) => f());
+}
+const chunks = new Map(), CHUNK_MAX = 72;
+function getChunk(i, j, allowPaint) {
+  const id = j * NCX + i; let e = chunks.get(id);
+  if (e) { chunks.delete(id); chunks.set(id, e); return e; }
+  if (!allowPaint) return null;
+  let cnv;
+  if (chunks.size >= CHUNK_MAX) { const [old, oc] = chunks.entries().next().value; chunks.delete(old); cnv = oc; cnv.getContext('2d').clearRect(0, 0, CPX, CPX); }
+  else { cnv = document.createElement('canvas'); cnv.width = cnv.height = CPX; }
+  paintChunk(cnv.getContext('2d'), i, j); chunks.set(id, cnv); return cnv;
+}
+const NEAR_Z = .4, FAR_Z = .9;
+function ownerColor(id) { if (id === me) return '#f2c14e'; let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) | 0; return `hsl(${((h >>> 0) % 12) * 30 + 8},62%,52%)`; }
+function distStats(d) {
+  const D = DIST[d], owners = {}; let free = 0, mine = 0;
+  for (const id of D.plots) { const l = land[pkey(id)]; if (!l) free++; else { owners[l.owner] = (owners[l.owner] || 0) + 1; if (l.owner === me) mine++; } }
+  const ids = Object.keys(owners), ruler = !free && ids.length === 1 ? ids[0] : null;
+  const top = ids.sort((a, b) => owners[b] - owners[a])[0] || null;
+  return { n: D.plots.length, free, mine, sold: D.plots.length - free, ruler, top, topN: top ? owners[top] : 0 };
+}
+function districtPrice(d) { const st = distStats(d), s0 = soldCount(); let p = 0; for (let i = 0; i < st.free; i++) p += LAND_BASE + LAND_STEP * (s0 + i); return Math.round(p * (1 - BULK_OFF)); }
+function prepareWorld() {
+  for (const t of TREES) { const [n, x, y, v] = t, w = 32; bucketItem({ z: y, draw: (c) => (n === 'pine' ? whole(c, 'pine', x, y - 48) : spr(c, 'maple', v * 32, 0, 32, 48, x, y - 48)) }, x, y - 48, w, 48); }
+  for (const [n, x, y] of PROPS) { const r = A[n]; bucketItem({ z: y + r[3], draw: (c) => whole(c, n, x, y) }, x, y, r[2], r[3]); }
 }
 function drawFence(c, x0, y0) {
   const R = x0 + (LOT - 1) * TS, B = y0 + (LOT - 1) * TS;
@@ -200,8 +342,11 @@ function easeZoom(dt) {
   if (Math.abs(cam.tz - cam.z) < cam.z * .002) { if (cam.z !== cam.tz) { const t = cam.tz; zoomAt(t / cam.z, cam.ax, cam.ay); } return; }
   const t = cam.tz, nz = cam.z + (t - cam.z) * Math.min(1, dt * 14); zoomAt(nz / cam.z, cam.ax, cam.ay); cam.tz = t; clampCam();
 }
-const player = { x: (M + 3 + 2 * PITCH + 10.5) * TS, y: (M + 3 + PITCH + 14) * TS, dir: 0, flip: false, moving: false, tx: null, ty: null };
-const walkable = (x, y) => { const k = g(Math.floor(x / TS), Math.floor(y / TS)); return x > M * TS && y > M * TS && x < WPXW - M * TS && y < WPXH - M * TS && k !== 3; };
+const START_DIST = Math.max(0, DIST.findIndex((d) => d.name === 'Gallia'));
+const player = { x: townCenter(START_DIST)[0], y: townCenter(START_DIST)[1] + (LOT / 2 + 1.2) * TS, dir: 0, flip: false, moving: false, tx: null, ty: null };
+function travelTo(px, py) { player.x = px; player.y = py; player.tx = null; cam.follow = true; cam.x = px; cam.y = py; if (cam.z < 2) { cam.z = cam.tz = 2.4; } clampCam(); }
+const travelToDist = (d) => { const [x, y] = townCenter(d); travelTo(x, y + (LOT / 2 + 1.2) * TS); };
+const walkable = (x, y) => g(Math.floor(x / TS), Math.floor(y / TS)) !== 3;
 function stepPlayer(dt) {
   let dx = 0, dy = 0;
   if (keys.has('a') || keys.has('ArrowLeft')) dx--; if (keys.has('d') || keys.has('ArrowRight')) dx++;
@@ -285,19 +430,52 @@ function drawHUD(now) {
   button(zx, zy + 2 * (bh + S * 2), bh, bh, '', goHome, { square: true, icon: (x0, y0) => ic('map', x0, y0) });
 }
 function goHome() {
-  const mine = Object.keys(land).filter((k) => land[k].owner === me);
-  if (!mine.length) { toast('No land yet. Heading to the square.'); player.tx = (PLAZA[0] + 10.5) * TS; player.ty = (PLAZA[1] + 14) * TS; cam.follow = true; return; }
-  const [x, y] = mine[0].split('_').map(Number); player.tx = (x + 5) * TS; player.ty = (y + LOT + .5) * TS; cam.follow = true; sel = mine[0];
+  const mine = myPlots();
+  if (!mine.length) { toast('No land yet. Back to the Gallia town square.'); travelToDist(START_DIST); return; }
+  const [x, y] = mine[0].split('_').map(Number); travelTo((x + 5) * TS, (y + LOT + .5) * TS); sel = mine[0]; ui.dist = -1;
+}
+function drawDistrictLabels(L, T) {
+  const sm = Math.round(F * .8), pad = S * 4, placed = [];
+  const order = DIST.map((D, d) => d).sort((a, b) => (b === ui.dist) - (a === ui.dist) || DIST[b].plots.length - DIST[a].plots.length);
+  order.forEach((d) => {
+    const D = DIST[d];
+    const [wx, wy] = townCenter(d), sx = (wx - L) * cam.z, sy = (wy - T) * cam.z;
+    if (sx < -100 || sy < -60 || sx > vw + 100 || sy > vh + 60) return;
+    const st = distStats(d), line = st.ruler ? (st.ruler === me ? 'Ruled by you' : 'Ruled') : `${st.sold}/${st.n} owned`;
+    const w = Math.max(tw(D.name, sm), tw(line, Math.round(sm * .8))) + pad * 2 + S * 4, h = sm * 1.8 + pad * 2, x = Math.round(sx - w / 2), y = Math.round(sy - h / 2);
+    if (placed.some(([a, b, c, e]) => x < a + c + S * 2 && a < x + w + S * 2 && y < b + e + S * 2 && b < y + h + S * 2)) return; placed.push([x, y, w, h]);
+    nine(cx, ui.dist === d ? 'slothot' : 'panel', x, y, w, h, ui.dist === d ? 4 : 8, S * .6);
+    text(D.name, x + w / 2, y + pad - S, { align: 'center', size: sm, color: st.mine ? '#a2401f' : '#4a2a17' });
+    text(line, x + w / 2, y + pad + sm * .95, { align: 'center', size: Math.round(sm * .8), color: '#6b4a2f' });
+    hits.push({ x, y, w, h, fn: () => { ui.dist = d; sel = null; ui.win = null; } });
+  });
+}
+function drawDistCard(now) {
+  if (ui.dist < 0 || sel) return;
+  const d = ui.dist, D = DIST[d], st = distStats(d), f = myFarm(), pad = S * 8, lh = F + S;
+  const room = vw - S * 8 - pad * 2 - 22 * S, fit = (...v) => v.find((r) => tw(r) <= room) || v[v.length - 1];
+  const rows = [`${D.name} district`, fit(`${st.n} plots · ${st.free} free · ${st.mine} yours`, `${st.free}/${st.n} free · ${st.mine} yours`),
+    st.ruler ? `Ruled by ${st.ruler === me ? 'you' : names[st.ruler] || 'another farmer'}` : st.top ? `Most land: ${st.top === me ? 'you' : names[st.top] || 'a farmer'} (${st.topN})` : 'Nobody owns land here yet'];
+  let btns = [];
+  if (st.free) { const pr = districtPrice(d); rows.push(fit(`All ${st.free} free plots: ${fmt(pr, 0)} PURR (10% off)`, `All ${st.free} free: ${fmt(pr, 0)} PURR, -10%`, `${fmt(pr, 0)} PURR, -10%`)); if (signedIn) btns.push([`Buy whole district`, () => actions.buyDistrict({ d }), !!f && f.purr >= pr, true]); }
+  btns.push(['Travel here', () => { travelToDist(d); ui.dist = -1; }, true]);
+  const bh = 16 * S + S * 6, w = Math.min(vw - S * 8, Math.max(...rows.map((r) => tw(r)), ...btns.map(([b]) => tw(b) + S * 16)) + pad * 2 + 16 * S);
+  const h = rows.length * lh + btns.length * (bh + S * 3) + pad * 2 + S * 2;
+  const x0 = S * 4, y0 = Math.max(vh * .32, vh - h - (myFarm() ? 16 * S + S * 40 : S * 8));
+  panel(x0, y0, w, h);
+  rows.forEach((r, i) => text(r, x0 + pad, y0 + pad + i * lh, { color: i ? '#4a2a17' : '#a2401f' }));
+  btns.forEach(([b, fn, en, go], i) => button(x0 + pad, y0 + pad + rows.length * lh + S * 3 + i * (bh + S * 3), w - pad * 2, bh, b, fn, { enabled: en, go }));
+  button(x0 + w - 16 * S - S * 8, y0 + S * 5, 16 * S + S * 4, 16 * S + S * 4, '', () => { ui.dist = -1; }, { square: true, icon: (x, y) => ic('x', x, y) });
 }
 function drawLotCard(now) {
   if (!sel) return;
   const f = myFarm(), l = land[sel], pad = S * 8, lh = F + S;
   let rows = [], btns = [];
   const p = l && farms[l.owner] && farms[l.owner].plots && farms[l.owner].plots[sel];
-  if (!l) { const pr = landPrice(); rows = [`Plot #${lotNo(sel)} · For sale`, `Price ${fmt(pr, 0)} PURR`]; btns = [['Buy this plot', actions.buyLand, !!f && f.purr >= pr, true]]; }
+  if (!l) { const pr = landPrice(); rows = [`${distOf(sel).name} · plot #${lotNo(sel)} · For sale`, `Price ${fmt(pr, 0)} PURR`]; btns = [['Buy this plot', actions.buyLand, !!f && f.purr >= pr, true], ['View district', () => { ui.dist = PLOT_DIST[PLOT_INDEX[sel]]; sel = null; }, true]]; }
   else {
     const mine = l.owner === me;
-    rows = [`Plot #${lotNo(sel)} · ${mine ? 'Yours' : (names[l.owner] || 'Another farmer')}`];
+    rows = [`${distOf(sel).name} · plot #${lotNo(sel)} · ${mine ? 'Yours' : (names[l.owner] || 'Another farmer')}`];
     if (!p || p.kind === 'empty') {
       rows.push('Empty plot');
       if (mine) {
@@ -316,7 +494,7 @@ function drawLotCard(now) {
       else { rows.push(`${H.name} · mining ${H.rate} PURR/h`); if (mine && p.level < 3) btns.push([`Upgrade to ${HOUSE[p.level + 1].name}`, () => openBuild(sel), true]); }
     }
   }
-  if (!signedIn) btns = [];
+  if (!signedIn) btns = btns.filter((b) => b[0] === 'View district');
   const bh = 16 * S + S * 6, w = Math.min(vw - S * 8, Math.max(...rows.map((r) => tw(r)), ...btns.map(([b]) => tw(b) + S * 16)) + pad * 2 + 16 * S);
   const h = rows.length * lh + btns.length * (bh + S * 3) + pad * 2 + S * 2;
   const x0 = S * 4, y0 = Math.max(vh * .32, vh - h - (myFarm() ? 16 * S + S * 40 : S * 8));
@@ -398,7 +576,7 @@ function drawWindow() {
     rows.forEach(([id, e, n], i) => { const c = id === me ? '#a2401f' : '#4a2a17'; text(`${i + 1}. ${id === me ? 'You' : (names[id] || 'Farmer')} · ${n} plots`, x, y + i * lh, { color: c }); text(fmt(e, 0), x + w, y + i * lh, { align: 'right', color: c }); });
   }
   if (ui.win === 'help') {
-    const tips = ['Walk with WASD or the arrow keys, or tap where to go.', 'Drag to look around. Scroll or pinch to zoom.', 'Tap a plot with a wooden sign to buy it with PURR.', 'Buy seeds, wood and stone in the Shop.', 'Pick a seed in the bar, tap your plot, then Plant.', 'Harvest ripe crops. PURR goes to your storage.', 'Build houses on your plots. They mine PURR every hour.', 'Open Build to construct or upgrade. It takes a few minutes.', 'Claim storage to your wallet every 10 min (5% fee).', 'PURR and USDT here are play money for testing.', 'Art: Farm RPG Tiny Asset Pack by EmanuelleDev.'];
+    const tips = ['Walk with WASD or the arrow keys, or tap where to go.', 'Drag to look around. Scroll or pinch to zoom.', 'Zoom out to see the whole continent and who owns what.', 'Tap a district name to buy all its free plots at 10% off.', 'Zoom in and tap a plot with a wooden sign to buy it.', 'Buy seeds, wood and stone in the Shop.', 'Pick a seed in the bar, tap your plot, then Plant.', 'Harvest ripe crops. PURR goes to your storage.', 'Build houses on your plots. They mine PURR every hour.', 'Open Build to construct or upgrade. It takes a few minutes.', 'Claim storage to your wallet every 10 min (5% fee).', 'PURR and USDT here are play money for testing.', 'Art: Farm RPG Tiny Asset Pack by EmanuelleDev.'];
     const [x, y] = windowFrame('How to play', 17 * 16 * S, tips.length * lh + 16 * S * 2.4);
     tips.forEach((t, i) => text(t, x, y + i * lh, { size: Math.round(F * .9) }));
   }
@@ -415,11 +593,12 @@ function drawModal() {
   msg.forEach((m, i) => text(m, vw / 2, y + S * 10 + i * lh, { align: 'center', color: i ? '#4a2a17' : '#a2401f' }));
   if (btn) button(x + S * 10, y + S * 10 + msg.length * lh, w - S * 20, 16 * S + S * 4, btn[0], btn[1], { go: true });
 }
+function startPlay() { ui.title = false; cam.follow = true; cam.tz = 2.6; cam.ax = vw / 2; cam.ay = vh / 2; }
 function drawTitle(t) {
   cx.fillStyle = 'rgba(30,18,10,.45)'; cx.fillRect(0, 0, vw, vh); blocks.push([0, 0, vw, vh]); hits.push({ x: 0, y: 0, w: vw, h: vh, fn: null });
   const maxW = vw - S * 8, pad = S * 12;
   let big = Math.round(F * 2.6); while (big > F && tw('PURRL VALLEY', big) + pad * 2 > maxW) big -= 2;
-  const sub = 'A cozy pixel farming village', subSize = tw(sub) + pad * 2 > maxW ? Math.round(F * .8) : F;
+  const sub = 'A pixel continent of farms', subSize = tw(sub) + pad * 2 > maxW ? Math.round(F * .8) : F;
   const bh = 16 * S + S * 6, w = Math.min(maxW, Math.max(tw('PURRL VALLEY', big), tw(sub, subSize)) + pad * 2);
   const h = pad + 16 * S + S * 4 + big + S * 2 + subSize + S * 10 + bh + S * 6 + F + pad;
   const x = vw / 2 - w / 2; let y = vh / 2 - h / 2;
@@ -428,7 +607,7 @@ function drawTitle(t) {
   text('PURRL VALLEY', vw / 2, y, { align: 'center', size: big, color: '#a2401f' }); y += big + S * 2;
   text(sub, vw / 2, y, { align: 'center', size: subSize }); y += subSize + S * 10;
   const bw = Math.min(w - pad * 2, 6 * 16 * S);
-  button(vw / 2 - bw / 2, y, bw, bh, 'Play', () => { ui.title = false; }, { go: true }); y += bh + S * 6;
+  button(vw / 2 - bw / 2, y, bw, bh, 'Play', startPlay, { go: true }); y += bh + S * 6;
   text('Art by EmanuelleDev', vw / 2, y, { align: 'center', size: Math.round(F * .75), color: '#8a6a4a' });
 }
 function drawToast(now) {
@@ -442,7 +621,7 @@ const keys = new Set();
 let ready = false, last = performance.now();
 function frame(t) {
   const dt = Math.min(.05, (t - last) / 1000); last = t;
-  if (ready) stepPlayer(dt);
+  if (ready) { stepPlayer(dt); growOverview(ui.title ? 24 : 10); }
   easeZoom(dt);
   if (cam.follow) { cam.x += (player.x - cam.x) * Math.min(1, dt * 6); cam.y += (player.y - cam.y) * Math.min(1, dt * 6); }
   clampCam();
@@ -451,20 +630,46 @@ function frame(t) {
   cx.setTransform(dpr, 0, 0, dpr, 0, 0); cx.imageSmoothingEnabled = false;
   cx.fillStyle = '#3f8a3a'; cx.fillRect(0, 0, vw, vh);
   if (ready) {
-    cx.drawImage(world, L, T, sw, sh, 0, 0, vw, vh);
+    // ground: the continent overview underneath, sharp chunks on top when close enough
+    cx.drawImage(overview, L * OVS, T * OVS, sw * OVS, sh * OVS, 0, 0, vw, vh);
+    const close = cam.z >= NEAR_Z;
+    if (close) {
+      let paints = ovNext < NCX * NCY ? 2 : 6;
+      for (let j = Math.max(0, Math.floor(T / CPX)); j <= Math.min(NCY - 1, Math.floor((T + sh) / CPX)); j++) for (let i = Math.max(0, Math.floor(L / CPX)); i <= Math.min(NCX - 1, Math.floor((L + sw) / CPX)); i++) {
+        const c = chunks.has(j * NCX + i) ? getChunk(i, j, false) : paints > 0 ? (paints--, getChunk(i, j, true)) : null; if (!c) continue;
+        const x0 = Math.floor((i * CPX - L) * cam.z), y0 = Math.floor((j * CPX - T) * cam.z), x1 = Math.floor(((i + 1) * CPX - L) * cam.z), y1 = Math.floor(((j + 1) * CPX - T) * cam.z);
+        cx.drawImage(c, 0, 0, CPX, CPX, x0, y0, x1 - x0, y1 - y0);
+      }
+    }
     cx.setTransform(dpr * cam.z, 0, 0, dpr * cam.z, -L * cam.z * dpr, -T * cam.z * dpr);
-    const lots = PLOTS.filter(([x, y]) => x * TS + LOT * TS > L && x * TS < L + sw && y * TS + LOT * TS > T - 64 && y * TS < T + sh);
-    let drewPlayer = false;
-    for (const [x, y] of lots) { if (!drewPlayer && (y + LOT) * TS > player.y + 40) { drawPlayer(cx, t); drewPlayer = true; } drawLot(cx, key(x, y), now); }
-    const fx = (PLAZA[0] + 10.5) * TS - 24, fy = (PLAZA[1] + 10.5) * TS - 40;
-    if (!drewPlayer && player.y < fy + 56) { drawPlayer(cx, t); drewPlayer = true; }
-    spr(cx, 'fountain', (Math.floor(t / 160) % 4) * 48, 0, 48, 64, fx, fy);
-    if (!drewPlayer) drawPlayer(cx, t);
+    const P = CELL * TS, c0 = Math.max(0, Math.floor(L / P)), c1 = Math.min(CW - 1, Math.floor((L + sw) / P)), r0 = Math.max(0, Math.floor((T - 64) / P)), r1 = Math.min(CH - 1, Math.floor((T + sh + 64) / P));
+    if (close) {
+      let drewPlayer = false;
+      for (let r = r0; r <= r1; r++) for (let q = c0; q <= c1; q++) {
+        const cell = r * CW + q, [lx, ly] = [q * CELL + 1, r * CELL + 1];
+        if (!drewPlayer && (ly + LOT) * TS > player.y + 40) { drawPlayer(cx, t); drewPlayer = true; }
+        if (CELLPLOT[cell] >= 0) drawLot(cx, key(lx, ly), now);
+        else if (CT[cell] === C_TOWN) spr(cx, 'fountain', (Math.floor(t / 160) % 4) * 48, 0, 48, 64, (lx + LOT / 2) * TS - 24, (ly + LOT / 2) * TS - 40);
+      }
+      if (!drewPlayer) drawPlayer(cx, t);
+    }
+    // who owns what: tint plots when zoomed out, borders and district names
+    const far = Math.min(1, Math.max(0, (FAR_Z - cam.z) / (FAR_Z - NEAR_Z * .5)));
+    if (far > 0) {
+      for (let r = r0; r <= r1; r++) for (let q = c0; q <= c1; q++) {
+        const id = CELLPLOT[r * CW + q]; if (id < 0) continue; const l = land[pkey(id)]; if (!l) continue;
+        cx.globalAlpha = (l.owner === me ? .85 : .6) * far; cx.fillStyle = ownerColor(l.owner); cx.fillRect((q * CELL + 1) * TS, (r * CELL + 1) * TS, LOT * TS, LOT * TS);
+      }
+      cx.globalAlpha = .55 * far; cx.strokeStyle = '#fff3df'; cx.lineWidth = 2 / cam.z; cx.stroke(BORDERS); cx.globalAlpha = 1;
+    }
+    if (!close && !ui.title) { cx.globalAlpha = .6; cx.fillStyle = '#fff3df'; cx.fillRect(player.x - 3 / cam.z, player.y - 3 / cam.z, 6 / cam.z, 6 / cam.z); cx.globalAlpha = 1; }
+    if (ui.dist >= 0) { cx.strokeStyle = '#3b1f12'; cx.lineWidth = 6 / cam.z; cx.stroke(DIST_EDGE[ui.dist]); cx.strokeStyle = Math.floor(t / 380) % 2 ? '#fff3df' : '#f2c14e'; cx.lineWidth = 3 / cam.z; cx.stroke(DIST_EDGE[ui.dist]); }
     cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (far > .3 && !ui.title) drawDistrictLabels(L, T);
     const box = (k, col, w) => { const [x, y] = k.split('_').map(Number), sx = (x * TS - cam.x) * cam.z + vw / 2, sy = (y * TS - cam.y) * cam.z + vh / 2, s = LOT * TS * cam.z; cx.strokeStyle = col; cx.lineWidth = w; cx.strokeRect(sx + w / 2, sy + w / 2, s - w, s - w); };
-    if (hover && hover !== sel) box(hover, 'rgba(255,243,223,.8)', 2);
+    if (hover && hover !== sel && close) box(hover, 'rgba(255,243,223,.8)', 2);
     if (sel) { box(sel, '#3b1f12', 5); box(sel, Math.floor(t / 380) % 2 ? '#fff3df' : '#f2c14e', 3); }
-    if (ui.title) drawTitle(t); else { drawHUD(now); drawLotCard(now); drawModal(); drawWindow(); drawToast(t); }
+    if (ui.title) drawTitle(t); else { drawHUD(now); drawLotCard(now); drawDistCard(now); drawModal(); drawWindow(); drawToast(t); }
   }
   requestAnimationFrame(frame);
 }
@@ -487,15 +692,16 @@ cv.addEventListener('pointermove', (e) => {
   if (pinch && ptrs.size === 2) { const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y); zoomAt(pinch.z * d / pinch.d / cam.z, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top); return; }
   if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 6) { drag.moved = true; cam.follow = false; } if (drag.moved) { cam.x = drag.cx - dx / cam.z; cam.y = drag.cy - dy / cam.z; clampCam(); } }
   const overUI = hitAt(x, y) || blocks.some((b) => inside(b, x, y));
-  hover = !overUI && e.pointerType === 'mouse' ? lotOfPx(...toWorld(x, y)) : null;
+  hover = !overUI && e.pointerType === 'mouse' && cam.z >= NEAR_Z ? lotOfPx(...toWorld(x, y)) : null;
   cv.style.cursor = drag && drag.moved ? 'grabbing' : hitAt(x, y) && hitAt(x, y).fn ? 'pointer' : overUI ? 'default' : 'grab';
 });
 function endPtr(e) {
   const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top; mouse.down = false;
   if (!ptrs.has(e.pointerId)) { const h = hitAt(x, y); if (h && h.fn && e.type === 'pointerup') h.fn({ x, y }); return; }
   if (drag && !drag.moved && ptrs.size === 1 && e.type === 'pointerup') {
-    const [wx, wy] = toWorld(x, y), k = lotOfPx(wx, wy);
-    sel = k; ui.win = null; cam.follow = true;
+    const [wx, wy] = toWorld(x, y), k = cam.z >= NEAR_Z ? lotOfPx(wx, wy) : null;
+    if (cam.z < NEAR_Z) { const d = distAtPx(wx, wy); ui.dist = d; sel = null; ui.win = null; ptrs.delete(e.pointerId); if (!ptrs.size) drag = null; return; }
+    sel = k; ui.win = null; ui.dist = -1; cam.follow = true;
     if (k) { const [lx, ly] = k.split('_').map(Number); player.tx = (lx + 5) * TS; player.ty = (ly + LOT + .4) * TS; }
     else if (walkable(wx, wy)) { player.tx = wx; player.ty = wy; }
   }
@@ -512,7 +718,7 @@ cv.addEventListener('wheel', (e) => {
   cam.follow = false; zoomTo(f, x, y); // zoom toward the cursor; walking re-centres on the player
 }, { passive: false });
 const MOVE = ['w', 'a', 's', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Shift'];
-window.addEventListener('keydown', (e) => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; if (MOVE.includes(k)) { keys.add(k); if (k.startsWith('Arrow')) e.preventDefault(); } if (k === '+' || k === '=') zoomTo(1.25, vw / 2, vh / 2); if (k === '-') zoomTo(.8, vw / 2, vh / 2); if (k === 'Escape') { sel = null; ui.win = null; } if (k === 'Enter') ui.title = false; });
+window.addEventListener('keydown', (e) => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; if (MOVE.includes(k)) { keys.add(k); if (k.startsWith('Arrow')) e.preventDefault(); } if (k === '+' || k === '=') zoomTo(1.25, vw / 2, vh / 2); if (k === '-') zoomTo(.8, vw / 2, vh / 2); if (k === 'Escape') { sel = null; ui.win = null; } if (k === 'Enter' && ui.title) startPlay(); });
 window.addEventListener('keyup', (e) => keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key));
 window.addEventListener('blur', () => keys.clear());
 
@@ -530,6 +736,21 @@ async function act(fn) {
 async function lease(ref) { for (let i = 0; i < 6; i++) { const r = await ref.acquire({ holder: me, ttlMs: 4000 }); if (r.acquired) return; await new Promise((ok) => setTimeout(ok, 400 + Math.random() * 400)); } fail('Someone else is trading. Try again shortly.'); }
 const actions = {
   start: () => act(async () => { const now = Date.now(); await saveFarm({ purr: START.purr, usdt: START.usdt, pending: 0, accrueAt: now, lastClaim: 0, earned: 0, inv: {}, plots: {}, createdAt: now }); toast('Starter pack claimed. Tap a plot with a wooden sign.'); }),
+  buyDistrict: (d) => act(async () => {
+    const D = DIST[d.d], free = D.plots.map(pkey).filter((k) => !land[k]), f = accrued(myFarm()), pr = districtPrice(d.d);
+    if (!free.length) fail('No free plots left in ' + D.name + '.'); if (f.purr < pr) fail('Not enough PURR.');
+    const s0 = soldCount(); let got = 0, paid = 0;
+    toast(`Buying ${free.length} plots in ${D.name}...`);
+    try {
+      for (let i = 0; i < free.length; i += 8) await Promise.all(free.slice(i, i + 8).map(async (k) => {
+        const ref = db.doc('land/' + k), l = await ref.acquire({ holder: me, ttlMs: 6000 }); if (!l.acquired) return;
+        const cur = await ref.get(); if (cur.exists && cur.data().owner) return;
+        await ref.set({ owner: me, at: Date.now() }); land[k] = { owner: me }; f.plots[k] = { kind: 'empty' };
+        paid += (LAND_BASE + LAND_STEP * (s0 + got)) * (1 - BULK_OFF); got++;
+      }));
+    } finally { f.purr -= Math.round(paid); if (got) await saveFarm(f); }
+    toast(got === free.length ? `${D.name} is yours: ${got} plots for ${fmt(Math.round(paid), 0)} PURR.` : `Bought ${got} of ${free.length} plots. Others were taken first.`);
+  }),
   buyLand: () => act(async () => {
     const k = sel, pr = landPrice(), f = accrued(myFarm());
     if (!(k in PLOT_INDEX)) fail('This plot is not for sale.'); if (f.purr < pr) fail('Not enough PURR.');
@@ -573,15 +794,15 @@ function swap(dir, v) {
 // ================= boot =================
 new ResizeObserver(resize).observe(cv); resize();
 requestAnimationFrame(frame);
-atlasReady.then(() => { paintWorld(); ready = true; cam.x = player.x; cam.y = player.y; cam.z = 3; clampCam(); });
+atlasReady.then(() => { prepareWorld(); ready = true; cam.follow = false; cam.x = WPXW / 2; cam.y = WPXH / 2; cam.z = cam.tz = 0; clampCam(); });
 (async () => {
   if (!window.claude) { signedIn = false; return; }
   [db, user] = await Promise.all([claude.use('db'), claude.use('user')]);
   if (user) { me = await user.id(); canWrite = await user.can('data.write'); }
   signedIn = !!(db && me); if (!signedIn) { db = null; return; }
   const refreshNames = async () => { const ids = Object.keys(farms); if (!user || !ids.length) return; try { const ps = await user.profiles(ids); for (const id of ids) names[id] = ps[id].name; } catch (e) {} };
-  db.collection('land').onSnapshot((s) => { const n = {}; s.docs.forEach((d) => { const v = d.data(); if (v && v.owner) n[d.id] = v; }); land = n; }, (e) => console.error(e));
-  db.collection('farms').onSnapshot((s) => { const n = {}; s.docs.forEach((d) => (n[d.id] = d.data())); farms = n; refreshNames(); }, (e) => console.error(e));
+  db.collection('land').onSnapshot((s) => { const n = {}; s.docs.forEach((d) => { const v = d.data(); if (v && v.owner && d.id in PLOT_INDEX) n[d.id] = v; }); land = n; }, (e) => console.error(e));
+  db.collection('farms').onSnapshot((s) => { const n = {}; s.docs.forEach((d) => { const v = d.data(); if (v && v.plots) for (const k of Object.keys(v.plots)) if (!(k in PLOT_INDEX)) delete v.plots[k]; n[d.id] = v; }); farms = n; refreshNames(); }, (e) => console.error(e));
   db.doc('market/pool').onSnapshot((s) => { pool = s.exists ? s.data() : null; }, (e) => console.error(e));
 })();
 </script>
